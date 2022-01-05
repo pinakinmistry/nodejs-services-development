@@ -75,3 +75,23 @@ module.exports = router;
 ```
 
 Express has res.render built-in to its core and it works in essentially the same way as reply.render added by the point-of-view plugin when registered in a Fastify server - although at the time of writing Express v4 renders at about half the speed of Fastify's point-of-view in production.
+
+## Streaming with Fastify
+
+```cmd
+npm install hn-latest-stream
+cd routes
+node -e "fs.mkdirSync('articles')"
+cd articles
+node -e "fs.openSync('index.js', 'w')"
+cd ..
+cd ..
+```
+
+```js
+return hnLatestStream(amount, type)
+```
+
+Returning the stream (the result of calling hnLatestStream) from the route handler instructs Fastify to safely pipe the stream to the response. The reply.send method can also be passed a stream and Fastify behaves in the same way - by piping the stream as the HTTP response.
+
+Due to Fastify handling the stream for us, any errors in the stream will be handled and propagated. If we disconnect from the Internet and then attempt to access results in server error
