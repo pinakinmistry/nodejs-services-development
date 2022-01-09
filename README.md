@@ -282,3 +282,19 @@ console.log(statusCode))"
 node -e "http.request('http://localhost:3000/bicycle/1', { method: 'post'}, ({statusCode}) \
 => console.log(statusCode)).end()"
 ```
+
+For Fastify the default behavior in this scenario is to respond with a 404 as well, so this will output: 404. Other acceptable response status codes would be 405 Method not Allowed and 400 Bad Request. The reason that a 405 is not the default for this scenario is that a 404 gives less information than a 405, so for public facing services this is a more secure approach.
+
+### Testing 500 error handling
+
+Let's check whether the server responds with a 500 status code for an unknown error. We'll have to modify the models.js file for this one. Let's temporarily alter the read function in models.js to look as follows:
+
+function read (id, cb) {
+  setImmediate(() => cb(Error()))
+}
+
+To make sure this change is applied, restart the server (Ctrl+C and then npm run dev or npm start), then in another terminal run the following command:
+
+node -e "http.get('http://localhost:3000/bicycle/1', ({statusCode}) => console.log(statusCode))"
+
+The route now has an error that doesn't relate to an ID not existing, so the output of this command should now be: 500. In the async function route example, any error that doesn't have the message 'not found' is re-thrown inside the catch block. This propagates the error so that it's handled by Fastify, which auto-generates a 500 Server Error status code. In the callback-based examples of the route handler, any error that doesn't have the message 'not found' is passed to reply.send which recognizes that it's been passed an error object and from there generates a 500 Server Error status code.
