@@ -373,6 +373,20 @@ module.exports = router;
 
 var bicycleRouter = require('./routes/bicycle');
 app.use('/bicycle', bicycleRouter);
+
+app.use(function(req, res, next) {
+  next(createError(404));
+});
+// or
+app.use(function(err, req, res, next) {
+  res.status(err.status || 500);
+  res.send({
+    type: 'error',
+    status: err.status,
+    message: err.message,
+    stack: req.app.get('env') === 'development' ? err.stack : undefined
+  });
+});
 ```
 
 ```cmd
@@ -381,3 +395,25 @@ node -e "http.get('http://localhost:3000/bicycle/1', ({headers}) => console.log(
 
 'content-type' property in the response headers is set to 'application/json; charset=utf-8' as Express framework has detected that the response is JSON because res.send was passed an object, and set the headers appropriately.
 
+## Manipulating Data with RESTful Services
+
+The key difference is idempotency, which means that multiple identical operations should lead to the same result. POST is not idempotent but PUT is idempotent.
+
+So multiple identical POST requests would, for instance, create multiple entries with identical data whereas multiple PUT requests should overwrite the same entry with the same data. This does not mean that PUT can't be used to create entries, or that POST can't be used to update, it's just that expected behavior is different.
+
+A POST request can be used to create an entry without supplying an ID, whereas a PUT request could be used to create an entry where a specific ID is desired.
+
+Using POST to update should be an explicitly separate route for updating versus creating whereas the ability update or create with PUT can exist on the same route.
+
+Implementing POST, PUT and DELETE with Fastify (Cont.)
+This route allows a new entry to be created by using the uid method exported from model.js to get a new ID and then passes that ID along with an expected `data` property in the request POST payload to the create method.
+
+Note how there is no explicit error handling here, since the only known error would regarding the resource already existing and since the uid function provides a new ID that won't be an issue. Any error therefore would be an unknown error, if create throws for any reason this will cause the async function route handler to throw and then be handled as a 500 Server Error by Fastify.
+
+A successful request will respond with a 201 Created status code and send back a JSON object containing an id property with a value of the ID for the new entry.
+
+By default Fastify supports application/json POST requests. The fastify-multipart plugin can be used to support multipart/formdata requests and fastify-formbody can be used to support application/x-www-form-urlencoded POST requests.
+
+```cmd
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red'}}))"
+```
