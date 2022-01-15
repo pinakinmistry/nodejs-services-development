@@ -397,6 +397,82 @@ node -e "http.get('http://localhost:3000/bicycle/1', ({headers}) => console.log(
 
 ## Manipulating Data with RESTful Services
 
+### With Fastify
+
+```js
+// routes/bicycle.js
+
+'use strict'
+const { promisify } = require('util')
+const { bicycle } = require('../../model')
+const { uid } = bicycle
+const read = promisify(bicycle.read)
+const create = promisify(bicycle.create)
+const update = promisify(bicycle.update)
+
+module.exports = async (fastify, opts) => {
+  const { notFound } = fastify.httpErrors
+
+  fastify.post('/', async (request, reply) => {
+    const { data } = request.body
+    const id = uid()
+    await create(id, data)
+    reply.code(201)
+    return { id }
+  })
+
+  fastify.post('/:id/update', async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await update(id, data)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.get('/:id', async (request, reply) => {
+    const { id } = request.params
+    try {
+      return await read(id)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.put('/:id', async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await create(id, data)
+      reply.code(201)
+      return {}
+    } catch (err) {
+      if (err.message === 'resource exists') {
+        await update(id, data)
+        reply.code(204)
+      } else {
+        throw err
+      }
+    }
+  })
+
+  fastify.delete('/:id', async (request, reply) => {
+    const { id } = request.params
+    try {
+      await del(id)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+}
+```
+
 The key difference is idempotency, which means that multiple identical operations should lead to the same result. POST is not idempotent but PUT is idempotent.
 
 So multiple identical POST requests would, for instance, create multiple entries with identical data whereas multiple PUT requests should overwrite the same entry with the same data. This does not mean that PUT can't be used to create entries, or that POST can't be used to update, it's just that expected behavior is different.
@@ -416,4 +492,46 @@ By default Fastify supports application/json POST requests. The fastify-multipar
 
 ```cmd
 node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red'}}))"
+
+// output should be: 201 {"id":"3"}
+
+node -e "http.request('http://localhost:3000/bicycle/3/update', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end(JSON.stringify({data: {brand: 'Ampler', color: 'blue'}}))"
+
+// output 204
+```
+
+The only legitimate case for responding with no data is when the status code is 204 No Content but since 201 Created applies far more strongly in the case of entry creation we send an empty object in response.
+
+```cmd
+node -e "http.request('http://localhost:3000/bicycle/99', { method: 'put', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end(JSON.stringify({data: {brand: 'VanMoof', color: 'black'}}))"
+
+// output: 201
+
+node -e "http.get('http://localhost:3000/bicycle/99', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output: {"brand":"VanMoof","color":"black"}.
+
+node -e "http.request('http://localhost:3000/bicycle/99', { method: 'put', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end(JSON.stringify({data: {brand: 'Bianchi', color: 'pink'}}))"
+
+// output: 204
+
+node -e "http.get('http://localhost:3000/bicycle/99', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output: {"brand":"Bianchi","color":"pink"}
+
+node -e "http.get('http://localhost:3000/bicycle/1', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output {"brand":"Veloretti","color":"green"}
+
+node -e "http.request('http://localhost:3000/bicycle/1', { method: 'delete', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end()"
+
+// output: 204
+
+node -e "http.get('http://localhost:3000/bicycle/1', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output: {"statusCode":404,"error":"Not Found","message":"Not Found"}
+
+node -e "http.request('http://localhost:3000/bicycle/1', { method: 'delete', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end()"
+
+// output: 404
 ```
