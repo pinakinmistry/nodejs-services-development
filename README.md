@@ -744,3 +744,132 @@ node -e "http.get('http://localhost:3000/bicycle/99', (res) => res.setEncoding('
 // output a JSON object with a type property containing 'error', status property containing 404, and a stack property as per our changes to app.js in the previous chapter.
 
 ```
+
+## Services Aggregation and Consumption
+
+A common case for Node.js services, and RESTful services in general, is to provide a mediation role sometimes known as the "front of the backend". These are services which sit between client requests, especially from a browser-client, and backend API's which may be SOAP, RPC, database or also other REST-based APIs.
+
+How one service discovers another service is a large subject from custom IP addresses to service meshes with DNS discovery and domain names, to solutions that incorporate Distributed Hash Tables; there are many ways for one service to discover another.
+
+Supporting deployment infrastructure to inject values into the process at deployment-time allows for a certain degree of flexibility and reconfiguration possibilities.
+
+```js
+// bicycle-service.js
+
+'use strict'
+const http = require('http')
+const url = require('url')
+const colors = ['Yellow', 'Red', 'Orange', 'Green', 'Blue', 'Indigo']
+const MISSING = 2
+
+const server = http.createServer((req, res) => {
+  const { pathname } = url.parse(req.url)
+  let id = pathname.match(/^\/(\d+)$/)
+  if (!id) {
+    res.statusCode = 400
+    return void res.end()
+  }
+
+  id = Number(id[1])
+
+  if (id === MISSING) {
+    res.statusCode = 404
+    return void res.end()
+  }
+
+  res.setHeader('Content-Type', 'application/json')
+
+  res.end(JSON.stringify({
+    id: id,
+    color: colors[id % colors.length]
+  }))
+})
+
+server.listen(process.env.PORT || 0, () => {
+  const { port } = server.address()
+  console.log('Bicycle service listening on localhost on port: ' + port)
+})
+```
+
+```js
+// brand-service.js
+
+'use strict'
+const http = require('http')
+const url = require('url')
+const brands = ['Gazelle', 'Batavus', 'Azor', 'Cortina', 'Giant','Sparta']
+const MISSING = 3
+
+const server = http.createServer((req, res) => {
+  const { pathname } = url.parse(req.url)
+  let id = pathname.match(/^\/(\d+)$/)
+
+  if (!id) {
+    res.statusCode = 400
+    return void res.end()
+  }
+
+  id = Number(id[1])
+
+  if (id === MISSING) {
+    res.statusCode = 404
+    return void res.end()
+  }
+
+  res.setHeader('Content-Type', 'application/json')
+
+  res.end(JSON.stringify({
+    id: id,
+    name: brands[id % brands.length]
+  }))
+})
+
+server.listen(process.env.PORT || 0, () => {
+  const { port } = server.address()
+  console.log('Brand service listening on localhost on port: ' + port)
+})
+```
+
+```cmd
+PORT=4000 node bicycle-service.js
+PORT=5000 node brand-service.js
+```
+
+## Consuming Data
+
+Using async/await route handlers with Node.js core modules for making requests can become ergonomically challenging. We'll use the got module because it's well-scoped, well-engineered and has API's that are compatible with async/await functions that we'll be using as route handlers.
+
+```cmd
+npm init fastify
+npm install
+npm install got
+```
+
+```js
+// routes/root.js
+
+'use strict'
+const got = require('got')
+
+const {
+  BICYCLE_SERVICE_PORT = 4000, BRAND_SERVICE_PORT = 5000
+} = process.env
+
+const bicycleSrv = `http://localhost:${BICYCLE_SERVICE_PORT}`
+const brandSrv = `http://localhost:${BRAND_SERVICE_PORT}`
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/:id', async function (request, reply) {
+    const { id } = request.params
+    const [ bicycle, brand ] = await Promise.all([
+      got(`${bicycleSrv}/${id}`).json(),
+      got(`${brandSrv}/${id}`).json()
+    ])
+    return {
+      id: bicycle.id,
+      color: bicycle.color,
+      brand: brand.name,
+    }
+  })
+}
+```
