@@ -981,3 +981,117 @@ node -e "http.get('http://localhost:3000/foo', (res) => console.log(res.statusCo
 This will output: 500.
 
 Both 400 and 404 status codes are forwarded to the response. All status codes in the 3xx, 4XX and 5XX ranges from the upstream services result in 500 status codes from our consumer service.
+
+## Proxying HTTP Requests
+
+An HTTP Proxy is a server that forwards HTTP requests to backend services and then forwards responses to clients.
+
+As the system scales, at a certain point, the need for proxying tends to become inevitable.
+
+Generally, proxying should be done with a specialized configurable piece of infrastructure, such as NGINX, Kong or proprietary cloud gateway services.
+
+However, sometimes there are complex requirements for a proxy that may be better met with a Node.js proxying service. Other times the requirements may be so simple (like proxying a single route) that it just makes sense to use what's already available instead of investing in something else.
+
+In other cases, a Node.js proxying service can be a stop-gap on the way to a more comprehensive infrastructural proxying solution.
+
+## Single Route, Multiple Origin Proxy
+
+There may be some circumstances where we need to send data from another service via our service. In these cases, we could actually use an HTTP request library like got as explored in the prior chapter. However, using a proxying library is a viable alternative that provides a more configuration-based approach vs the procedural approach of using a request library.
+
+```cmd
+node -e "fs.mkdirSync('my-route-proxy')"
+cd my-route-proxy
+npm init fastify
+npm install fastify-reply-from fastify-sensible
+```
+
+```js
+// app.js
+'use strict'
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+const replyFrom = require('fastify-reply-from')
+const sensible = require('fastify-sensible')
+
+module.exports = async function (fastify, opts) {
+
+  fastify.register(sensible)
+  fastify.register(replyFrom)
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'plugins'),
+    options: Object.assign({}, opts)
+  })
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'routes'),
+    options: Object.assign({}, opts)
+  })
+}
+```
+
+```js
+// routes/root.js
+'use strict'
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    const { url } = request.query
+    try {
+      new URL(url)
+    } catch (err) {
+      throw fastify.httpErrors.badRequest()
+    }
+    return reply.from(url)
+  })
+}
+```
+
+`reply.from` method is supplied by the fastify-reply-from plugin and returns a promise that resolves once the response from the upstream URL has been sent as a response to the client. We return it so that the route handler knows when the request has finished being handled by reply.from.
+
+### Tiniest server
+
+```cmd
+node -e "http.createServer((_, res) => (res.setHeader('Content-Type', 'text/plain'), res.end('hello world'))).listen(5000)"
+```
+
+Now if we navigate to htt‌p://localhost:3000/?url=http://localhost:5000 in a browser we should see hello world displayed. Most sites will trigger a redirect if they detect that a proxy server is being used (and the url query string parameter tends to give it away). For instance, if we navigate to http://localhost:3000/?url=http://google.com the browser will receive a 301 Moved response which will cause the browser to redirect to http://google.com directly. Therefore this approach is better suited when using URLs that are only accessible internally and this exposed route is a proxy to accessing them.
+
+The fastify-reply-from plugin can also be configured so that it can only proxy to a specific upstream server using the base option. In this case reply.from would be passed a path instead of a full URL and then make a request to the base URL concatenated with the path passed to reply.from. This can be useful for mapping different endpoints to a specific upstream service.
+
+More advanced proxying scenarios involve rewriting some aspect of the response from the upstream service while it's replying to the client. To finish off this section let's make our proxy server uppercase all content that arrives from the upstream service before sending it on to the client.
+
+```js
+// routes/root.js
+
+'use strict'
+const { Readable } = require('stream')
+async function * upper (res) {
+  for await (const chunk of res) {
+    yield chunk.toString().toUpperCase()
+  }
+}
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    const { url } = request.query
+    try {
+      new URL(url)
+    } catch (err) {
+      throw fastify.httpErrors.badRequest()
+    }
+    return reply.from(url, {
+      onResponse (request, reply, res) {
+        reply.send(Readable.from(upper(res)))
+      }
+    })
+  })
+}
+```
+
+The second argument passed to reply.from is the options object. It contains an onResponse function. If the onResponse function is provided in the options object, the fastify-reply-from plugin will call it and will not end the response, it becomes up to us to manually end the response (with reply.send) in this case. The onResponse function is passed the request and reply objects for the route handler and a third argument: res, which represents the response from the upstream service. This is the same core http.IncomingMessage object that's passed to the callback of an http.request call.
+
+The `upper` function is an async generator function. The res object is an async iterable, which means it can be used with for await of syntax. This allows us to grab each chunk from the upstream services response, convert it to a string and then uppercase it. We yield the result from the upper function. The upper function in turn returns an async iterable object which can be passed to the Node core streams.Readable.from method which will convert the async iterable into a stream. The result is passed into reply.send which will take the data from the stream and send it to the response.
+
+We could have instead buffered all content into memory, uppercased it, and then sent the entire contents to reply.send instead but this would not be ideal in a proxying situation: we don't necessarily know how much content we may be fetching. Instead our approach incrementally processes each chunk of data from the upstream service, sending it immediately to the client.
+
