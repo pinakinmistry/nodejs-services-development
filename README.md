@@ -1095,3 +1095,62 @@ The `upper` function is an async generator function. The res object is an async 
 
 We could have instead buffered all content into memory, uppercased it, and then sent the entire contents to reply.send instead but this would not be ideal in a proxying situation: we don't necessarily know how much content we may be fetching. Instead our approach incrementally processes each chunk of data from the upstream service, sending it immediately to the client.
 
+## Single Origin, Multiple Routes
+
+Instead of using a querystring parameter we can map every path (and indeed every HTTP method) made to our proxy service straight to the upstream service.
+
+```cmd
+node -e "fs.mkdirSync('my-proxy')"
+cd my-proxy
+npm init fastify
+npm install fastify-http-proxy
+```
+
+```js
+// app.js
+
+'use strict'
+const proxy = require('fastify-http-proxy')
+module.exports = async function (fastify, opts) {
+  fastify.register(proxy, {
+    upstream: 'htt‌ps://news.ycombinator.com/'
+  })
+}
+```
+
+`npm run dev` and open `http://localhost:3000`
+
+If we click any of the links along the top, for instance the new link, this will navigate to http://localhost:3000/newest which will then display the current Hacker News page of the newest articles.
+
+The fastify-http-proxy uses the fastify-reply-from plugin under the hood with a handler that takes all the requests, figures out the path and then passes them to reply.from.
+
+Generally speaking the upstream option would be set to some internal service that is not accessible publicly and typically it's more likely that it would be a data service of some kind (for instance, providing JSON responses).
+
+Imagine a nascent authentication approach which isn't yet supported in larger projects. We can use the preHandler option supported by fastify-http-proxy to implement custom authentication logic.
+
+```js
+// app.js
+
+'use strict'
+
+const proxy = require('fastify-http-proxy')
+const sensible = require('fastify-sensible')
+module.exports = async function (fastify, opts) {
+  fastify.register(sensible)
+  fastify.register(proxy, {
+    upstream: 'https://news.ycombinator.com/',
+    async preHandler(request, reply) {
+      if (request.query.token !== 'abc') {
+        throw fastify.httpErrors.unauthorized()
+      }
+    }
+  })
+
+}
+```
+
+Opening `http://localhost:3000/` with result in
+
+{"statusCode":401,"error":"Unauthorized","message":"Unauthorized"}
+
+Opening `http://localhost:3000/?token=abc` will work again.
