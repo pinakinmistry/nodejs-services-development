@@ -1154,3 +1154,203 @@ Opening `http://localhost:3000/` with result in
 {"statusCode":401,"error":"Unauthorized","message":"Unauthorized"}
 
 Opening `http://localhost:3000/?token=abc` will work again.
+
+## Web Security - Handling User Input
+
+The implications of a malicious user who is able to exploit insecure code can be significant. Therefore it is of paramount importance to always ensure that any external inputs to a service are sanitized in ways that prevent potential attackers from gaining any control of backend systems or from borrowing the authority of a site to exploit other users.
+
+### Parameter Pollution Attack
+
+The parameter pollution exploits a bug that's often created by developers when handling query string parameters. Even when we know about the potential for the bug, it can still be easy to forget. The main aim of such an attack is to cause a service to either crash to slow down by generating an exception in the service. In cases where a crash occurs, it will be because of an unhandled exception. In cases where a slow down occurs it can be caused by generating an exception that's generically handled and the error handling overhead (for instance, stack generation for a new error object on every request) and then sending many requests to the server. Both of these are forms of Denial of Service attacks, we cover mitigating such attacks in next section.
+
+A query-string is the first occurrence of the part of a URL starting with a question mark. For instance, given a URL: ht‌tp://example.com/?name=bob the query string is ?name=bob. All mainstream Node.js frameworks (and the node core querystring module) parse ?name=bob into an object with a property of name and a value of 'bob', like so: {name: 'bob'}. However query-strings allow for an array-like concept. The following is a legitimate query string: ?name=bob&name=dave. In all popular Node frameworks (and Node core querystring) the parsed query-string will result in an object with a name key with a value of ['bob', 'dave'], like so: {name: ['bob', 'dave']}.
+
+```cmd
+node -p "querystring.parse('name=bob')"
+output: [Object: null prototype] { name: 'bob' }
+
+node -p "querystring.parse('name=bob&name=dave')"
+output: [Object: null prototype] { name: [ 'bob', 'dave' ] }
+```
+
+```js
+router.get('/', (req, res, next) => {
+  someAsynchronousOperation(() => {
+    if (!req.query.name) {
+      var err = new Error('Bad Request')
+      err.status = 400
+      next(err)
+      return
+    }
+    var parts = req.query.name.split(' ');
+    var last = parts.pop();
+    var first = parts.shift();
+    res.send({first: first, last: last});
+  })
+});
+```
+
+Following query-string will cause the entire service to crash: ?name=David Mark Clements&name=kaboom. This is because req.query will be an object with a name property containing an array, like so: {name: ['David Mark Clements', 'kaboom']}. So in this case, req.query.name.split will not exist, arrays do not have a split function. This will cause an Uncaught TypeError which will not be handled. Express has no way of catching unhandled exceptions that occur in asynchronous operations. This is why async/await syntax with Fastify is recommended, because even when errors occur in a Fastify route handler it will propagate as a promise rejection into Fastify core and result in a 500 Server Error instead of crashing the service.
+
+The only way to avoid a parameter pollution attack is to ensure that any code written for query-string parameters can run without error against both strings and arrays.
+
+```js
+function convert (name) {
+  var parts = name.split(' ');
+  var last = parts.pop();
+  var first = parts.shift();
+  return {first: first, last: last};
+}
+router.get('/', (req, res, next) => {
+  someAsynchronousOperation(() => {
+    if (!req.query.name) {
+      var err = new Error('Bad Request')
+      err.status = 400
+      next(err)
+      return
+    }
+    if (Array.isArray(req.query.name)) {
+      res.send(req.query.name.map(convert));
+    } else {
+      res.send(convert(req.query.name));
+    }
+  });
+});
+```
+
+### Route Validation with Fastify
+
+CRUD with fastify
+
+```js
+// app.js
+
+'use strict'
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+const sensible = require('fastify-sensible')
+module.exports = async function (fastify, opts) {
+
+  fastify.register(sensible)
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'plugins'),
+    options: Object.assign({}, opts)
+  })
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'routes'),
+    options: Object.assign({}, opts)
+  })
+}
+```
+
+```js
+// routes/bicycle/index.js
+
+'use strict'
+const { promisify } = require('util')
+const { bicycle } = require('../../model')
+const { uid } = bicycle
+const read = promisify(bicycle.read)
+const create = promisify(bicycle.create)
+const update = promisify(bicycle.update)
+const del = promisify(bicycle.del)
+
+module.exports = async (fastify, opts) => {
+  const { notFound } = fastify.httpErrors
+
+  fastify.post('/', async (request, reply) => {
+    const { data } = request.body
+    const id = uid()
+    await create(id, data)
+    reply.code(201)
+    return { id }
+  })
+
+  fastify.post('/:id/update', async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await update(id, data)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.get('/:id', async (request, reply) => {
+    const { id } = request.params
+    try {
+      return await read(id)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.put('/:id', async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await create(id, data)
+      reply.code(201)
+      return { }
+    } catch (err) {
+      if (err.message === 'resource exists') {
+        await update(id, data)
+        reply.code(204)
+      } else {
+        throw err
+      }
+    }
+  })
+
+  fastify.delete('/:id', async (request, reply) => {
+    const { id } = request.params
+    try {
+      await del(id)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+}
+```
+
+The recommended approach to route validation in Fastify is using the schema option which can be passed when declaring routes. Fastify supports the JSONSchema format for declaring the rules for incoming (and also outgoing) data. Not only is support of this common format useful as a standardized validation convention, it's also used by Fastify to compile route specific serializers which speed up parsing time, improving a services request-per-seconds performance. Often the goals of performance and security compete, in that performance can suffer due to security and vice versa, yet using JSONSchema with Fastify yields gains for both.
+
+Let's make a schema for the POST body that enforces that shape by modifying the POST route to the following:
+
+```js
+fastify.post('/', {
+  schema: {
+    body: {
+      type: 'object',
+      required: ['data'],
+      additionalProperties: false,
+      properties: {
+        data: {
+          type: 'object',
+          required: ['brand', 'color'],
+          additionalProperties: false,
+          properties: {
+            brand: {type: 'string'},
+            color: {type: 'string'}
+          }
+        }
+      }
+    }
+  }
+}, async (request, reply) => {
+  const { data } = request.body
+  const id = uid()
+  await create(id, data)
+  reply.code(201)
+  return { id }
+})
+```
