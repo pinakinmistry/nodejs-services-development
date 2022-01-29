@@ -1354,3 +1354,259 @@ fastify.post('/', {
   return { id }
 })
 ```
+
+See htt‌ps://www.fastify.io/docs/latest/Routes/#options for a full list of options.
+
+The schema option supports body, query, params, headers and response as schemas that can be declared for these areas of input (or output in the case of response)
+
+We declare the schema.body.type as 'object' which will usually be the case, even if the service accepts alternative mime-types like multipart. This is because the schema is applied (conceptually) to the body after it has been parsed into a JavaScript object.
+
+We want to ensure that the data property exists on the incoming payload, so the schema.body.required array contains 'data'. Just specifying a required key is not enough, the property still needs to be described.
+
+By default the JSONSchema standard takes a lenient approach and allows additional properties beyond properties that are declared. We only want a data property on the POST body, so we opt-out of this default by setting the additionalProperties schema configuration option to false. Fastify is set up to strip additional properties.
+
+It will still allow the request, but remove extra properties if additionalProperties is false. This can be altered, along with other behaviours, see htt‌ps://www.fastify.io/docs/latest/Validation-and-Serialization/#validator-compiler for information on configuring all possible validation behaviors.
+
+The schema.body.properties has a data key, this declares that a data key is expected in the request body. The schema.body.properties.data key holds an object with a type key set to 'object', specifying that the POST body's data key should hold an object. We also want the color and brand keys in the POST data to be required, so we specify those in the schema.body.properties.data.required array. We also want to strip any extra properties, so we set schema.body.properties.data.additionalProperties to false.
+
+```cmd
+npm run dev
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red'}}))"
+
+// output: 201 {"id": "3"}.
+
+// The following command tries to make a POST request with this invalid payload:
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', colors: 'red'}}))"
+
+// output: 400 {"statusCode":400,"error":"Bad Request","message":"body.data should have required property 'color'"}. Fastify has generated a message letting us know why the data is not valid.
+
+// If we include extra properties in the payload, they will be stripped:
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red', extra: 'will be stripped'}}))"
+
+// output: 201 {"id":"4"}
+
+node -e "http.get('http://localhost:3000/bicycle/4', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output: {"brand":"Gazelle","color":"red"}, the extra key has not been stored because by the time we access request.body in the route handler the request.body.data.extra key doesn't even exist.
+```
+
+### Applying schema to all other methods
+
+The body schema that we declared for the first POST route also applies to the second POST route, and to the PUT route in routes/bicycle/index.js so we can reuse the schema we've written. Fastify supports shared schemas that can be used with the JSONSchema $ref key, see htt‌ps://www.fastify.io/docs/latest/Validation-and-Serialization/#adding-a-shared-schema.
+
+These routes also have another input that we haven't considered yet: the id route parameter. We can apply validation to route parameters with the schema.params option. The methods in models.js expect the ID to be an integer.
+
+```js
+// routes/bicyle/index.js
+
+'use strict'
+const { promisify } = require('util')
+const { bicycle } = require('../../model')
+const { uid } = bicycle
+const read = promisify(bicycle.read)
+const create = promisify(bicycle.create)
+const update = promisify(bicycle.update)
+const del = promisify(bicycle.del)
+
+module.exports = async (fastify, opts) => {
+  const { notFound } = fastify.httpErrors
+
+  const bodySchema = {
+    type: 'object',
+    required: ['data'],
+    additionalProperties: false,
+    properties: {
+      data: {
+        type: 'object',
+        required: ['brand', 'color'],
+        additionalProperties: false,
+        properties: {
+          brand: {type: 'string'},
+          color: {type: 'string'}
+        }
+      }
+    }
+  }
+
+  const paramsSchema = {
+    id: {
+      type: 'integer'
+    }
+  }
+
+  fastify.post('/', {
+    schema: {
+      body: bodySchema
+    }
+  }, async (request, reply) => {
+    const { data } = request.body
+    const id = uid()
+    await create(id, data)
+    reply.code(201)
+    return { id }
+  })
+
+  fastify.post('/:id/update', {
+    schema: {
+      body: bodySchema,
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await update(id, data)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.get('/:id', {
+    schema: {
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    try {
+      return await read(id)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.put('/:id', {
+    schema: {
+      body: bodySchema,
+      params: paramsSchema
+
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await create(id, data)
+      reply.code(201)
+      return { }
+    } catch (err) {
+      if (err.message === 'resource exists') {
+        await update(id, data)
+        reply.code(204)
+      } else {
+        throw err
+      }
+    }
+  })
+
+  fastify.delete('/:id', {
+    schema: {
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    try {
+      await del(id)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+}
+```
+
+Finally there's one more thing we can validate: the response. At first this can seem like an odd thing to do. However, in many enterprise architectures databases can be shared, in that multiple services may read and write to the same data storage. This means when retrieving data from a remote source, we cannot entirely trust that data even if it is internal. What if another service hasn't validated input? We don't want to send malicious state to the user.
+
+In the first POST route the returned ID has the same rules as the id route parameter: it should be an integer. We can reuse the schema just for the ID by breaking it out of the paramsSchema:
+
+```js
+const idSchema = { type: 'integer' }
+const paramsSchema = { id: idSchema }
+
+fastify.post('/', {
+  schema: {
+    body: bodySchema,
+    response: {
+      201: {
+        id: idSchema
+      }
+    }
+  }
+}, async (request, reply) => {
+  const { data } = request.body
+  const id = uid()
+  await create(id, data)
+  reply.code(201)
+  return { id }
+})
+```
+
+If we wanted to apply a schema to all response codes from 200 to 299 we could set a key called 2xx on the schema.response object.
+
+The read method responds with objects that contain a color and brand key, that's all we can store to it in fact. So we can reuse the bodySchema.properties.data object to validate the GET response. Let's break up the bodySchema object like so:
+
+```js
+const dataSchema = {
+  type: 'object',
+  required: ['brand', 'color'],
+  additionalProperties: false,
+  properties: {
+    brand: {type: 'string'},
+    color: {type: 'string'}
+  }
+}
+
+const bodySchema = {
+  type: 'object',
+  required: ['data'],
+  additionalProperties: false,
+  properties: {
+    data: dataSchema
+  }
+}
+
+fastify.get('/:id', {
+  schema: {
+    params: paramsSchema,
+    response: {
+      200: dataSchema
+    }
+  }
+}, async (request, reply) => {
+  const { id } = request.params
+  try {
+    return await read(id)
+  } catch (err) {
+    if (err.message === 'not found') throw notFound()
+    throw err
+  }
+})
+```
+
+While invalidation of input-related schemas (such as schema.body) will result in a 400 Bad Request, the invalidation of a response schema will result in a 500 Server Error result. We can try this out by temporarily modifying the GET route to respond with invalid data:
+
+```js
+fastify.get('/:id', {
+  schema: {
+    params: paramsSchema,
+    response: {
+      200: dataSchema
+    }
+  }
+}, async (request, reply) => {
+  const { id } = request.params
+  try {
+    return {ka: 'boom'}
+  } catch (err) {
+    if (err.message === 'not found') throw notFound()
+    throw err
+  }
+})
+```
+
+As a matter of preference, there is also a Fluent-API library that can generate the JSONSchema objects for us. For instance, the dataSchema could be declared with fluent-schema as S.object().prop('brand', S.string().required()).prop('color', S.string().required()).additionalProperties(false) where S is the fluent-schema instance. See htt‌ps://github.com/fastify/fluent-schema for more information.
