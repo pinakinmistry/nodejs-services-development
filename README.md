@@ -1610,3 +1610,194 @@ fastify.get('/:id', {
 ```
 
 As a matter of preference, there is also a Fluent-API library that can generate the JSONSchema objects for us. For instance, the dataSchema could be declared with fluent-schema as S.object().prop('brand', S.string().required()).prop('color', S.string().required()).additionalProperties(false) where S is the fluent-schema instance. See htt‌ps://github.com/fastify/fluent-schema for more information.
+
+## Route validation with Express
+
+Express does not offer any validation primitives or abstractions as a core part of the framework. There are no particular validation practices recommended in the frameworks' documentation.
+
+While validation libraries do exist - for an example see htt‌ps://express-validator.github.io/docs/ - there is no standard approach. It is even possible to use JSONSchema with Express via various middleware offerings but this is rarely seen in practice; possibly because the implementations available cause significant performance overhead.
+
+As a result the most common approach to validation in Express is to develop custom logic for the service as needed. This isn't exactly recommended, but when dealing with legacy services it's useful to understand this aspect of real-world legacy Express development.
+
+We'll be looking at hand-rolled validation rules for the Express service.
+
+```js
+// routes/bicycle.js
+
+var express = require('express');
+var router = express.Router();
+var model = require('../model');
+
+function hasOwnProperty (o, p) {
+  return Object.prototype.hasOwnProperty.call(o, p);
+}
+
+function validateData (o) {
+  var valid = o !== null && typeof o === 'object';
+  valid = valid && hasOwnProperty(o, 'brand');
+  valid = valid && hasOwnProperty(o, 'color');
+  valid = valid && typeof o.brand === 'string';
+  valid = valid && typeof o.color === 'string';
+  return valid && {
+    brand: o.brand,
+    color: o.color
+  };
+}
+
+function validateBody (o) {
+  var valid = o !== null && typeof o === 'object';
+  valid = valid && hasOwnProperty(o, 'data');
+  valid = valid && o.data !== null && typeof o.data === 'object';
+  var data = valid && validateData(o.data);
+  return valid && data && {
+    data: data
+  };
+}
+
+function isIdValid (n) {
+  n = Number(n)
+  var MAX_SAFE = Math.pow(2, 53) - 1
+  return isFinite(n) && Math.floor(n) === n && Math.abs(n) <= MAX_SAFE
+}
+
+function isParamsValid (o) {
+  var valid = o !== null && typeof o === 'object';
+  valid = valid && hasOwnProperty(o, 'id');
+  valid = valid && isIdValid(o.id);
+  return valid;
+}
+
+function badRequest () {
+  const err = new Error('Bad Request');
+  err.status = 400;
+  return err;
+}
+
+router.get('/:id', function (req, res, next) {
+  if (isParamsValid(req.params)) {
+    model.bicycle.read(req.params.id, (err, result) => {
+      if (err) {
+        if (err.message === 'not found') next();
+        else next(err);
+      } else {
+        var sanitizedResult = validateData(result);
+        if (sanitizedResult) {
+          res.send(sanitizedResult);
+        } else {
+          next(new Error('Server Error'));
+        }
+      }
+    });
+  } else {
+    next(badRequest());
+  }
+});
+
+router.post('/', function (req, res, next) {
+  var id = model.bicycle.uid();
+  var body = validateBody(req.body);
+  if (body) {
+    model.bicycle.create(id, body.data, (err) => {
+      if (err) {
+        next(err);
+      } else {
+        if (isIdValid(id)) res.status(201).send({ id });
+        else next(new Error('Server Error'));
+      }
+    });
+  } else {
+    next(badRequest());
+  }
+});
+
+router.post('/:id/update', function (req, res, next) {
+  if (isParamsValid(req.params)) {
+    var body = validateBody(req.body);
+    if (body) {
+      model.bicycle.update(req.params.id, body.data, (err) => {
+        if (err) {
+          if (err.message === 'not found') next();
+          else next(err);
+        } else {
+          res.status(204).send();
+        }
+      });
+    } else {
+      next(badRequest());
+    }
+  } else {
+    next(badRequest());
+  }
+});
+
+router.put('/:id', function (req, res, next) {
+  if (isParamsValid(req.params)) {
+    var body = validateBody(body);
+    if (body) {
+      model.bicycle.create(req.params.id, body.data, (err) => {
+        if (err) {
+          if (err.message === 'resource exists') {
+            model.bicycle.update(req.params.id, body.data, (err) => {
+              if (err) next(err);
+              else res.status(204).send();
+            });
+          } else {
+            next(err);
+          }
+        } else {
+          res.status(201).send({});
+        }
+      });
+    } else {
+      next(badRequest());
+    }
+  } else {
+    next(badRequest());
+  }
+});
+
+router.delete('/:id', function (req, res, next) {
+  if (isParamsValid(req.params)) {
+    model.bicycle.del(req.params.id, (err) => {
+      if (err) {
+        if (err.message === 'not found') next();
+        else next(err);
+      } else {
+        res.status(204).send();
+      }
+    });
+  } else {
+    next(badRequest());
+  }
+});
+
+module.exports = router;
+```
+
+It is possible to call o.hasOwnProperty('foo') where o is an object and foo is an expected property on the object. However since the method name can be overwritten, it's safer to apply the Object.prototypeo.hasOwnProperty function. We could use p in o to check if an object has a property but this will also check for prototype properties, for example 'toString' in {} evaluates to true even though it's an empty object.
+
+The isIdValid function checks that the input is an integer, thus enforcing that IDs are always integers. In modern JavaScript it could be written as const isIdValid = (n) => Number.isSafeInteger(Number(n)) but this code is written in a legacy style more appropriate to the majority of Express services in production.
+
+We also pass the result object provided to the callback passed to model.bicycle.read to check that the result matches our data validation constraints and strip any extra properties from it.
+
+```cmd
+npm start
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red'}}))"
+
+// output: 201 {"id": "3"}
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', colors: 'red'}}))"
+
+// output: 400 {"type":"error","status":400,"message":"Bad Request","stack": "..."}
+
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red', extra: 'will be stripped'}}))"
+
+// output: 201 {"id":"4"}
+
+node -e "http.get('http://localhost:3000/bicycle/4', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output:{"brand":"Gazelle","color":"red"}
+```
+
+supertest library is an excellent tool for testing Express services, see htt‌ps://github.com/visionmedia/supertest for more information.
