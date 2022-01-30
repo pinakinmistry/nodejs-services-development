@@ -1850,3 +1850,49 @@ app.use(function(err, req, res, next) {
 ```
 
 When dealing with an adversarial opponent, it's sometimes better to misinform than to give valid feedback. For example, using a 404 Not Found status could be better than a 403 Forbidden status since a 404 is misleading.
+
+## Block an Attackers' IP Address with Fastify
+
+Conversely to Express, Fastify uses a plugin-based approach and provides an abstraction on top of the native req and res objects (request and reply) instead of adding directly to them as in Express. To get the IP address of a requesting client we use request.ip.
+
+Fastify also provides a Hooks API, which allows us to intervene at various points of the request/response life-cycle. The first hook in the life-cycle is the onRequest hook.
+
+In a typical Fastify application (as in one created with npm init fastify), custom service configuration should be performed through plugins. To configure the server to block an IP, we could create a file named deny.js placed into the plugins folder. This will be automatically loaded (since the app.js file uses fastify-autoload to load all plugins in the plugins folder).
+
+```js
+// plugins/deny.js
+
+'use strict'
+
+const fp = require('fastify-plugin')
+
+module.exports = fp(async function (fastify, opts) {
+  fastify.addHook('onRequest', async function (request) {
+    if (request.ip === '127.0.0.1') {
+      const err = new Error('Forbidden')
+      err.status = 403
+      throw err
+    }
+  })
+})
+```
+
+The fastify-plugin module de-encapsulates a plugin, making it apply to the entire service because plugins are registered by fastify-autoload at the top level. So we pass our plugin function to fp (fastify-plugin) as we want the onRequest hook to apply to the service as a whole.
+
+A Fastify plugin is a function that either returns a promise or calls a callback and accepts the service instance (which we call fastify) and options (opts). We use an async function so a promise is returned automatically. We call the addHook method on the service instance (fastify.addHook), the first argument is a string identifying the hook we'd like to register (onRequest) and the second argument is an async function which is called and passed the request object for every incoming request. It's also passed the reply object but we don't need that for our purposes. We check whether request.ip matches our target IP and then throw an error with a status code of 403 if it does. Fastify automatically sets the status code to the status property of a thrown error if it exists.
+
+Alternatively, if we have fastify-sensible installed, we could implement the plugins/deny.js plugin as follows:
+
+```js
+'use strict'
+
+const fp = require('fastify-plugin')
+
+module.exports = fp(async function (fastify, opts) {
+  fastify.addHook('onRequest', async function (request) {
+    if (request.ip === '127.0.0.1') {
+      throw fastify.httpErrors.forbidden()
+    }
+  })
+})
+```
