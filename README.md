@@ -1801,3 +1801,52 @@ node -e "http.get('http://localhost:3000/bicycle/4', (res) => res.setEncoding('u
 ```
 
 supertest library is an excellent tool for testing Express services, see htt‌ps://github.com/visionmedia/supertest for more information.
+
+## Web Security - Mitigating Attacks
+
+Attacks can take various forms and have different goals.
+
+Sometimes it can be about stealing information, either from the server or from other users. Other times it can just be about causing disruption. The most prevalent example of disruption-focussed attacks is via a Denial of Service (DOS) attack.
+
+In the case of a Distributed Denial of Service (DDOS) attack this would mean automating a large amount of machines to each make a large amount of requests to a single service. Other Denial of Service (DOS) attacks may involve much fewer machines that make requests to an endpoint that has been identified as vulnerable to a payload (for instance one that decompresses to a much larger size). This topic in itself is extensive, and should mostly be handled by the infrastructure around a deployed Node.js service.
+
+### Objective
+
+Understand how to block an attackers IP in Express.
+Understand how to block an attackers IP in Fastify.
+Create plugins and use hooks in Fastify.
+
+## Block an Attackers' IP Address with Express
+
+Express is essentially a middleware pattern on top of Node's core http (and https) modules. The http (and https) modules use the net module for TCP functionality. Each req and res object that are provided to the request listener function (which is passed to http.createServer) have a socket property which is the underlying TCP socket for the request and response. So req.socket.remoteAddress will contain the IP address of the client making a request to an Express service.
+
+Express passes the req and res objects to each piece of registered middleware in the order that they are registered, in order to block an attacking IP, all we need to do is register a middleware function before other middleware and check req.socket.remoteAddress.
+
+```js
+app.use(function (req, res, next) {
+  if (req.socket.remoteAddress === '127.0.0.1') {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    next(err);
+    return;
+  }
+  next();
+});
+```
+
+Remember that a typical Express application has the following error handler middleware at the end of all registered middleware:
+
+```js
+// error handler
+app.use(function(err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
+
+  // render the error page
+  res.status(err.status || 500);
+  res.render('error');
+});
+```
+
+When dealing with an adversarial opponent, it's sometimes better to misinform than to give valid feedback. For example, using a 404 Not Found status could be better than a 403 Forbidden status since a 404 is misleading.
