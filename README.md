@@ -42,6 +42,249 @@ nvs add 16
 
 nvs use 16
 
+## Creating web server
+
+### With Node Core
+
+```cmd
+node -e "fs.mkdirSync('http-web-server')"
+cd http-web-server
+```
+
+```js
+// server.js
+
+'use strict'
+const http = require('http')
+const PORT = process.env.PORT || 3000
+
+const hello = `<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>`
+
+const server = http.createServer((req, res) => {
+  res.setHeader('Content-Type', 'text/html')
+  res.end(hello)
+})
+
+server.listen(PORT)
+```
+
+```cmd
+node server.js
+```
+
+The res object inherits from http.ServerResponse which in turn inherits from http.OutgoingMessage (a Node core internal constructor) which then inherits from stream.Stream. For all practical purposes the res object is a writable stream, which is why calling end writes our content and also closes the connection.
+
+```js
+// server.js
+
+'use strict'
+const url = require('url')
+const http = require('http')
+const PORT = process.env.PORT || 3000
+const { STATUS_CODES } = http
+
+const hello = `<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+   </style>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>`
+
+const root = `<html>
+<head>
+  <style>
+   body { background: #333; margin: 1.25rem }
+   a { color: yellow; font-size: 2rem; font-family: sans-serif }
+  </style>
+</head>
+<body>
+  <a href='/hello'>Hello</a>
+</body>
+</html>
+`
+
+const server = http.createServer((req, res) => {
+  res.setHeader('Content-Type', 'text/html')
+  if (req.method !== 'GET') {
+    res.statusCode = 405
+    res.end(STATUS_CODES[res.statusCode] + '\r\n')
+    return
+  }
+  const { pathname } = url.parse(req.url)
+  if (pathname === '/') {
+    res.end(root)
+    return
+  }
+  if (pathname === '/hello') {
+    res.end(hello)
+    return
+  }
+  res.statusCode = 404
+  res.end(STATUS_CODES[res.statusCode] + '\r\n')
+})
+
+server.listen(PORT)
+```
+
+```cmd
+node server.js
+```
+
+STATUS_CODES object contains key-values of status codes to HTTP status messages, from the http module.
+
+The Node core url module has a parse method which turns a URL string into an object containing various segments of the URL, such as host, protocol and pathname.
+
+The req.url property has a slightly misleading name. It does not hold the entire URL of an incoming request, only the relative path after the host portion. For instance a request to ht‌tp://localhost:3000/hello will result in a req.url of /hello. The reason we pass req.url to url.parse is to separate any potential query string from the URL. Now, let's consider a request to ht‌tp://localhost:3000/hello?foo=1. It would result in a req.url value of /hello?foo=1. Passing such a string to url.parse will result in an object with a pathname property of /hello.
+
+default res.statusCode is 200 (OK).
+
+```cmd
+node -e "ht‌tp.request('ht‌tp://localhost:3000', {method: 'POST'}, (res) => res.pipe(process.stdout)).end()"
+```
+
+This procedural approach can become very rigid and unwieldy if we were to attempt to extend functionality over time. In the next sections we'll learn how to use the Express and Fastify frameworks to achieve the same results in a more flexible, declarative manner.
+
+### With Express
+
+Express is one of the most widely used Node.js frameworks. More so when it comes to generating and delivering HTML dynamically, as opposed to delivering RESTful JSON content as a service.
+
+Even after the release of the next major version (Express 5, last alpha was two years ago, ETA unknown), understanding version 4 is essential from a pragmatic perspective since so many legacy code bases have been built using Express 3 and 4, which are fairly similar to each other.
+
+```cmd
+node -e "fs.mkdirSync('express-web-server')"
+cd express-web-server
+node -e "fs.mkdirSync('routes')"
+node -e "fs.mkdirSync('bin')"
+node -e "fs.openSync('app.js', 'w')"
+cd routes
+node -e "fs.openSync('index.js', 'w')"
+node -e "fs.openSync('hello.js', 'w')"
+cd ../bin
+node -e "fs.openSync('www', 'w')"
+cd ..
+
+npm init -y
+npm install express@4 http-errors@2
+```
+
+```js
+// package.json
+
+"scripts": {
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "start": "node ./bin/www"
+},
+```
+
+```js
+// app.js
+
+'use strict'
+const express = require('express')
+const app = express()
+
+module.exports = app
+```
+
+```js
+// bin/www
+
+#!/usr/bin/env node
+'use strict'
+
+const app = require('../app')
+const http = require('http')
+const PORT = process.env.PORT || 3000
+const server = http.createServer(app)
+
+server.listen(PORT)
+```
+
+```cmd
+npm start
+
+http://localhost:3000
+Output: Cannot GET /
+```
+
+Define route
+
+```js
+// app.js
+
+'use strict'
+const express = require('express')
+const createError = require('http-errors')
+
+const app = express()
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    next(createError(405))
+    return
+  }
+  next(createError(404))
+})
+
+app.use((err, req, res, next) => {
+  res.status(err.status || 500)
+  res.send(err.message)
+})
+
+module.exports = app
+```
+
+ad of passing one big function to http.createServer, multiple functions can be registered via app.use. They will be called in order of registration, each one handing over to the following one when it's done processing. If the next function is not called, then the request handling ends there and none of the ensuing registered functions are called for that request. This approach is known as the middleware pattern. The building blocks for configuring an Express server are middleware functions.
+
+The first middleware function we registered should always be the second-to-last middleware. Essentially, if this middleware has been reached then we can assume that no routes were matched. Therefore we generate a 404 error using the http-errors module (part of the Express ecosystem). The http-errors module will generate an appropriate message for any HTTP status code passed to it. We then pass this error object as the first argument to the next callback function, which let’s Express know that an error has occurred. We may also pass a 405 (Method Not Allowed) error instead, if we find that the req.method property does not have the value of GET. This matches the functionality in our HTTP server implementation from the first section. Currently, we have no routes registered, so a 404 error is the default for any HTTP GET requests.
+
+The very last piece of middleware in our modified app file should always be the final piece of middleware. This registered middleware specifies four parameters instead of the usual three. This makes Express recognize the middleware as the final error handling middleware and passes the error object that we pass to next in the prior middleware as the first argument of this special error-handling middleware function. From there we can grab the HTTP status code from the error object and use it to set the response status code. Notice that we use a res.status function instead of the res.statusCode property. Similarly, we can use res.send instead of res.end to write and end the response. This is another method added by Express that will detect the Content-Type from the input, and potentially perform additional operations. For instance, if an object was passed to res.send that object would be serialized to JSON and the response Content-Type would automatically be set to application/json.
+
+Even though the req and res objects are generated by the http module and have all of the same functionality, Express decorates the req and res objects with additional functionality. We could not have used res.status or res.send in the previous section because these functions did not exist. Some, including this author, view Express' decorator approach on core APIs as a mistake. By conflating Node core APIs with Express APIs on the same objects the principles of least surprise and separation of concerns are violated, while also causing performance issues. However, so much legacy code has been written with Express it's important to understand its APIs.
+
+```js
+// routes/index.js
+
+'use strict'
+const { Router } = require('express')
+const router = Router()
+
+const root = `<html>
+<head>
+  <style>
+   body { background: #333; margin: 1.25rem }
+   a { color: yellow; font-size: 2rem; font-family: sans-serif }
+  </style>
+</head>
+<body>
+  <a href='/hello'>Hello</a>
+</body>
+</html>
+`
+
+router.get('/', (req, res) => {
+  res.send(root)
+})
+
+module.exports = router
+```
+
+
 ## Express
 
 ```cmd
