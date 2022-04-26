@@ -1,5 +1,47 @@
 # NodeJS Services Development
 
+## David Mark Clements
+
+Node Cookbook: Actionable Solutions for the Full Spectrum of Node.js 8 Development
+
+## Objective
+
+Understand foundational essentials for creating web servers.
+Explain how HTTP works at a Node core API level.
+Understand and leverage ecosystem frameworks for rapid composability.
+Cover essential RESTful practices and gain practical working knowledge of implementing RESTful services.
+Develop the skill of server and service composition.
+
+## Setup
+
+It's strongly recommended that if Node is installed via an Operating System Package Manager or directly via the website, that it be completely uninstalled. OS specific package managers tend to lag behind the faster Node.js release cycle. Additionally the placement of binary and config files and folders isn't standardized across OS package managers and can cause compatibility issues.
+Also, installing global modules with Node's module installer (npm) tends to require the use of sudo (a command which grants root privileges) on non-Windows systems. This is not an ideal setup for a developer machine and granting root privileges to the install process of third-party libraries is not a good security practice.
+
+The recommended way to install Node.js on macOS and Linux is by using a Node version manager, in particular nvm.
+
+The way to install nvm is via the install script at https://github.com/nvm-sh/nvm/blob/v0.39.1/install.sh. If curl is installed (it usually is) a single command can be used to install and setup nvm:
+
+curl -o- ht‌tps://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+
+If using zsh (e.g. on newer macOS releases) the bash part of the command can be replaced with zsh.
+
+Alternatively the file can be downloaded and saved, and then easily executed like so:
+
+cat install.sh | bash
+
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+
+nvm install 16
+
+node -v
+
+While nvm is recommended for macOS and Linux, and there is an unaffiliated nvm-windows version manager the recommended version manager for Windows is nvs. The nvs version manager is actually cross-platform so can be used on macOS and Linux but nvm is a lot more popular.
+
+nvs add 16
+
+nvs use 16
+
 ## Express
 
 ```cmd
