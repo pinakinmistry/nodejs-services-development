@@ -222,7 +222,7 @@ http://localhost:3000
 Output: Cannot GET /
 ```
 
-Define route
+#### Define route
 
 ```js
 // app.js
@@ -233,6 +233,7 @@ const createError = require('http-errors')
 
 const app = express()
 
+// Second last middleware
 app.use((req, res, next) => {
   if (req.method !== 'GET') {
     next(createError(405))
@@ -241,6 +242,7 @@ app.use((req, res, next) => {
   next(createError(404))
 })
 
+// Last middleware
 app.use((err, req, res, next) => {
   res.status(err.status || 500)
   res.send(err.message)
@@ -249,7 +251,9 @@ app.use((err, req, res, next) => {
 module.exports = app
 ```
 
-ad of passing one big function to http.createServer, multiple functions can be registered via app.use. They will be called in order of registration, each one handing over to the following one when it's done processing. If the next function is not called, then the request handling ends there and none of the ensuing registered functions are called for that request. This approach is known as the middleware pattern. The building blocks for configuring an Express server are middleware functions.
+Configuring an Express servers' behavior is almost always performed with app.use (where app is the Express instance). The app.use method takes a function which is very similar to the function that is passed to http.createServer. The function will be called for every incoming request, and it will be passed a request object and a response object.
+
+The difference between the function passed to app.use and the function passed to http.createServer is that it can also have a third parameter called next. This is an error-first callback function that is called when the function passed to app.use has completed any tasks and is ready to handover to the subsequent function registered via app.use. So this means that instead of passing one big function to http.createServer, multiple functions can be registered via app.use. They will be called in order of registration, each one handing over to the following one when it's done processing. If the next function is not called, then the request handling ends there and none of the ensuing registered functions are called for that request. This approach is known as the middleware pattern. The building blocks for configuring an Express server are middleware functions.
 
 The first middleware function we registered should always be the second-to-last middleware. Essentially, if this middleware has been reached then we can assume that no routes were matched. Therefore we generate a 404 error using the http-errors module (part of the Express ecosystem). The http-errors module will generate an appropriate message for any HTTP status code passed to it. We then pass this error object as the first argument to the next callback function, which let’s Express know that an error has occurred. We may also pass a 405 (Method Not Allowed) error instead, if we find that the req.method property does not have the value of GET. This matches the functionality in our HTTP server implementation from the first section. Currently, we have no routes registered, so a 404 error is the default for any HTTP GET requests.
 
@@ -284,6 +288,92 @@ router.get('/', (req, res) => {
 module.exports = router
 ```
 
+#### Create routes
+
+```js
+// routes/index.js
+
+'use strict'
+const { Router } = require('express')
+const router = Router()
+
+const root = `<html>
+<head>
+  <style>
+   body { background: #333; margin: 1.25rem }
+   a { color: yellow; font-size: 2rem; font-family: sans-serif }
+  </style>
+</head>
+<body>
+  <a href='/hello'>Hello</a>
+</body>
+</html>
+`
+
+router.get('/', (req, res) => {
+  res.send(root)
+})
+
+module.exports = router
+```
+
+```js
+// routes/hello.js
+
+'use strict'
+const { Router } = require('express')
+const router = Router()
+
+const hello = `<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>`
+
+router.get('/', (req, res) => {
+  res.send(hello)
+})
+
+module.exports = router
+```
+
+Note that we define the route path as / in this case as well, instead of /hello. This is because we'll be mounting this router at the /hello route path in app.js instead. This pattern allows for easy renaming of routes at the top level.
+
+```js
+// app.js
+
+'use strict'
+const express = require('express')
+const createError = require('http-errors')
+const indexRoutes = require('./routes')
+const helloRoutes = require('./routes/hello')
+
+const app = express()
+
+app.use('/', indexRoutes)
+app.use('/hello', helloRoutes)
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    next(createError(405))
+    return
+  }
+  next(createError(404))
+})
+
+app.use((err, req, res, next) => {
+  res.status(err.status || 500)
+  res.send(err.message)
+})
+
+module.exports = app
+```
 
 ## Express
 
