@@ -12,7 +12,7 @@ Understand and leverage ecosystem frameworks for rapid composability.
 Cover essential RESTful practices and gain practical working knowledge of implementing RESTful services.
 Develop the skill of server and service composition.
 
-## Setup
+## 2. Setup
 
 It's strongly recommended that if Node is installed via an Operating System Package Manager or directly via the website, that it be completely uninstalled. OS specific package managers tend to lag behind the faster Node.js release cycle. Additionally the placement of binary and config files and folders isn't standardized across OS package managers and can cause compatibility issues.
 Also, installing global modules with Node's module installer (npm) tends to require the use of sudo (a command which grants root privileges) on non-Windows systems. This is not an ideal setup for a developer machine and granting root privileges to the install process of third-party libraries is not a good security practice.
@@ -42,7 +42,7 @@ nvs add 16
 
 nvs use 16
 
-## Creating web server
+## 3. Creating web server
 
 ### With Node Core
 
@@ -446,6 +446,131 @@ The server instance that is passed as the first argument to this function is nam
 ```
 
 ```cmd
+npm run local
+```
+
+In Fastify, everything is a plugin. The distinction between plugins and routes is mostly convention-setting to help us reason about a server or service's functionality. The files in the routes folder are actually plugins (exported functions that return promises or use a next callback). The files in the plugins folder are also plugins, but they are more commonly de-encapsulated plugins, meaning that the functionality that they provide can be accessed by sibling plugins. Think of the plugins folder like a lib folder, but where a strict and enforceable common interface is used for every exported piece of functionality. The entry point is a plugin. Routes are plugins. Plugins (local libraries) are plugins.
+
+A key difference between Express middleware and Fastify plugins is that Express middleware is executed for every request (if reachable) but Fastify plugins are called only at initialization time. Fastify plugins are always asynchronous (either with a callback or a returned promise) to allow for asynchronous initialization of every plugin.
+
+```js
+// routes/root.js
+
+'use strict'
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    return { root: true }
+  })
+}
+```
+
+The fastify.get method can accept a normal synchronous function or an async function. Whatever is returned from the function or async function is automatically processed and sent as the content of the HTTP response.
+
+Alternatively the reply.send method can be used (e.g. reply.send({root: true})), which is similar to the res.send method of Express. This can be useful when working with nested callback APIs.
+
+```js
+// routes/root.js
+
+'use strict'
+
+const root = `<html>
+<head>
+  <style>
+   body { background: #333; margin: 1.25rem }
+   a { color: yellow; font-size: 2rem; font-family: sans-serif }
+  </style>
+</head>
+<body>
+  <a href='/hello'>Hello</a>
+</body>
+</html>
+`
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    reply.type('text/html')
+    return root
+  })
+}
+```
+
+```js
+// routes/example/index.js
+
+'use strict'
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    return 'this is an example'
+  })
+}
+```
+
+When a route is defined in a subfolder, by default, the fastify-autoload plugin will register that route prefixed with the name of the subfolder. So the example route is at routes/examples/index.js and registers a route at /. This causes fastify-autoload to register the server route at /example. If the route passed to fastify.get in routes/example/index.js had been /foo then fastify-autoload would have registered that route at /example/foo.
+
+```cmd
+cd routes
+node -e "fs.renameSync('example', 'hello')"
+```
+
+```js
+'use strict'
+
+const hello = `<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>`
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    reply.type('text/html')
+    return hello
+  })
+}
+```
+
+```js
+// app.js
+
+'use strict'
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+module.exports = async function (fastify, opts) {
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'plugins'),
+    options: Object.assign({}, opts)
+  })
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'routes'),
+    options: Object.assign({}, opts)
+  })
+
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.method !== 'GET') {
+      reply.status(405)
+      return 'Method Not Allowed\n'
+    }
+    return 'Not Found\n'
+  })
+
+}
+```
+
+
+
+```cmd
 npm init fastify
 
 // --integrate flag can be executed in a directory with a package.json file to generate a project and also // update the preexisting package.json file:
@@ -459,8 +584,6 @@ The npm init fastify command which generates a Fastify project uses fastify-cli 
 ```cmd
 npm install -g express-generator
 ```
-
-Even though the req and res objects are generated by the http module and have all of the same functionality, Express decorates the req and res objects with additional functionality. By conflating Node core APIs with Express APIs on the same objects the principles of least surprise and separation of concerns are violated, while also causing performance issues.
 
 The express command-line executable that's installed by the express-generator module when globally installed generates a bin/www file that similarly allows the port to be specified via a PORT environment variable.
 
