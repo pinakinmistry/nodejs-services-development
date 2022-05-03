@@ -560,13 +560,116 @@ npm install -g express-generator
 
 The express command-line executable that's installed by the express-generator module when globally installed generates a bin/www file that similarly allows the port to be specified via a PORT environment variable.
 
-## Serving web content
+## 4. Serving web content
 
 Static assets (content that does not change very often) should not be served by Node. Static content should be delivered via a CDN and/or a caching reverse proxy that specializes in static content such as NGINX or Varnish
 
 Node.js could serve static content for applications with very small user bases that have a very low growth potential
 
 Where Node.js shines however, is dynamic content. Using Node.js as a mediator for gathering data from multiple sources and rendering some output is perfect for such an evented language and non-blocking I/O platform
+
+## Objectives
+
+Learn how to serve static content with Fastify and Express.
+Understand the benefits of streaming and how to use it with Fastify and Express.
+Generate dynamic content with template engines in Fastify and Express.
+
+## Serving static content with Fastify
+
+```cmd
+npm install --save-dev fastify-static
+```
+
+```js
+// app.js
+
+'use strict'
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+const dev = process.env.NODE_ENV !== 'production'
+
+const fastifyStatic = dev && require('fastify-static')
+
+module.exports = async function (fastify, opts) {
+  if (dev) {
+    fastify.register(fastifyStatic, {
+      root: path.join(__dirname, 'public')
+    })
+  }
+  // ...
+}
+```
+
+```cmd
+node -e "fs.mkdirSync('public')"
+cd public
+node -e "fs.openSync('index.html', 'w')"
+node -e "fs.openSync('hello.html', 'w')"
+cd ..
+cd routes
+node -e "fs.unlinkSync('root.js')"
+node -e "fs.rmdirSync('hello', {recursive: true})"
+cd ..
+```
+
+```html
+<!-- public/index.html -->
+<html>
+<head>
+  <style>
+   body { background: #333; margin: 1.25rem }
+   a { color: yellow; font-size: 2rem; font-family: sans-serif }
+  </style>
+</head>
+<body>
+  <a hr‌ef='/hello.html'>Hello</a>
+</body>
+</html>
+```
+
+```html
+<!-- public/hello.html -->
+<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    <h1>Hello World</h1>
+  </body>
+</html>
+```
+
+```cmd
+npm run dev
+```
+
+The fastify-static module also decorates the reply object with sendFile method. We can use this to create a route that manually responds with the contents of hello.html if we wanted to alias /hello.html to /hello.
+
+```cmd
+cd routes
+node -e "fs.mkdirSync('hello')"
+cd hello
+node -e "fs.openSync('index.js', 'w')"
+cd ..
+cd ..
+```
+
+```js
+// routes/hello/index.js
+
+'use strict'
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    return reply.sendFile('hello.html')
+  })
+}
+```
 
 ## Using templates with Fastify and HandlebarJS
 
@@ -698,7 +801,7 @@ module.exports = router;
 
 The second parameter, an object with a property named end set to false prevents pipe from performing its default behavior of endings the destination stream (res) when the source stream (stream) has ended. This is important because without this, if there is an error in the source stream then res will be ended before our server can send an appropriate error response.
 
-# Restful JSON services
+## Restful JSON services
 
 REST stands for REpresentational State Transfer, and it's an architectural style that seeks to make the most of the features of HTTP/1.1. Data is communicated via HTTP response bodies, metadata is communicated through HTTP headers, and operation outcomes are communicated with HTTP status codes. The State Transfer part of REST is about shuffling state from clients to server-backends. A REST service should be stateless, an intermediate layer between a browser and a database and it should boil down to performing one or more CRUD operations (Create, Read, Update, Delete).
 
