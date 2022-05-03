@@ -673,6 +673,107 @@ module.exports = async (fastify, opts) => {
 
 ## Using templates with Fastify and HandlebarJS
 
+While the primary and original focus of Fastify was for building data services, view rendering capability is available with a little bit of set up.
+
+In the terminal, with fastify-web-server as the current working directory let's run the following command in order to install a template engine and Fastify's view rendering plugin:
+
+```cmd
+npm install point-of-view handlebars
+```
+
+Handlebars is one of the template engines that point-of-view supports.
+
+```js
+// app.js
+
+'use strict'
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+const pointOfView = require('point-of-view')
+const handlebars = require('handlebars')
+
+module.exports = async function (fastify, opts) {
+
+  fastify.register(pointOfView, {
+    engine: { handlebars },
+    root: path.join(__dirname, 'views'),
+    layout: 'layout.hbs'
+  })
+  // ...
+}
+```
+
+We've removed fastify-static which we introduced in the prior section, and with it the dev constant which we won't need for this case because our server will now be performing on-the-fly dynamic rendering.
+
+```cmd
+node -e "fs.mkdirSync('views')"
+cd views
+node -e "fs.openSync('index.hbs', 'w')"
+node -e "fs.openSync('hello.hbs', 'w')"
+node -e "fs.openSync('layout.hbs', 'w')"
+cd ..
+node -e "fs.rmdirSync('public', {recursive: true})"
+```
+
+```html
+<!-- view/layout.html -->
+<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+     a { color: yellow; font-size: 2rem; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    {{{ body }}}
+  </body>
+</html>
+```
+
+```html
+<!-- views/index.hbs -->
+<a href='/hello'>Hello</a><br>
+<a href='/hello?greeting=Ahoy'>Ahoy</a>
+```
+
+```html
+<!-- views/hello.hbs -->
+<h1>{{ greeting }} World</h1>
+```
+
+```cmd
+cd routes
+node -e "fs.openSync('root.js', 'w')"
+```
+
+```js
+// routes/root.js
+
+'use strict'
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    return reply.view('index.hbs')
+  })
+}
+```
+
+```js
+// routes/hello/index.js
+
+'use strict'
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    const { greeting = 'Hello '} = request.query
+    return reply.view(`hello.hbs`, { greeting })
+  })
+}
+```
+
 Using three braces to denote an interpolation point is Handlebars syntax that instructs the template engine to conduct raw interpolation.
 
 In other words, if the body template local contains HTML syntax the content will not be escaped whereas using two braces would cause HTML syntax to be escaped (for instance < would be escaped to &‌lt;). This should never be used when interpolating (uncleaned) user input into templates but when building a layout we need to inject raw HTML.
@@ -680,6 +781,8 @@ In other words, if the body template local contains HTML syntax the content will
 The body local is created automatically by point-of-view when rendering a view because we specified the layout option.
 
 The point-of-view plugin that we registered in app.js decorated the reply instance with a view method. When we registered point-of-view, we set the root option to the views folder. Therefore, when we pass 'index.hbs' to reply.view it knows to look for index.hbs in the view folder. Similarly, the layout option that we set to 'layout.hbs' indicates to point-of-view that the layout template can be found in views/layout.hbs. So when we use reply.view here point-of-view first renders both the views/index.hbs file and then interpolates the rendered output into views/layout.hbs and sends the final rendered output of both files combined as the response. The return value of the reply.view method must be returned from the async function passed as the route handler so that Fastify knows when the route handler has finished processing the request.
+
+The reply.view method can take a second parameter, an object which sets the values of the template locals. Recall that views/hello.hbs contains a greeting template local, we pass an object with a property called greeting and a value defaulting to 'Hello' or else the value of a URL query string key named greeting. For instance, a request to /hello?greeting=Ahoy would result in the greeting constant being set to 'Ahoy' for that request.
 
 ## Serving static content and using templates with Express
 
