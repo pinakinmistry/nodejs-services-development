@@ -989,6 +989,10 @@ var indexRouter = require('./routes/index');
 var helloRouter = require('./routes/hello');
 var articlesRouter = require('./routes/articles');
 
+app.use('/', indexRouter);
+app.use('/hello', helloRouter);
+app.use('/articles', articlesRouter);
+
 // routes/articles.js
 
 var express = require('express');
@@ -1019,7 +1023,11 @@ router.get('/', function(req, res, next) {
 module.exports = router;
 ```
 
-The second parameter, an object with a property named end set to false prevents pipe from performing its default behavior of endings the destination stream (res) when the source stream (stream) has ended. This is important because without this, if there is an error in the source stream then res will be ended before our server can send an appropriate error response.
+The stream.pipe(res, {end: false}) line tells the stream (our Hacker News stream) to write all data it receives to the res object (which is also a stream). The second parameter, an object with a property named end set to false prevents pipe from performing its default behavior of endings the destination stream (res) when the source stream (stream) has ended. This is important because without this, if there is an error in the source stream then res will be ended before our server can send an appropriate error response.
+
+```cmd
+npm start
+```
 
 ## Restful JSON services
 
