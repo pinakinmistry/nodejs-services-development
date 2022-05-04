@@ -788,6 +788,8 @@ The reply.view method can take a second parameter, an object which sets the valu
 
 The original focus of the Fastify framework was on building RESTful JSON services, whereas Express is more geared towards template rendering (and static serving static content). Therefore Express has these pieces built into its core whereas in Fastify template rendering is an add-on.
 
+We'll use the express-generator command-line utility to generate a new project with view rendering and static asset serving preconfigured.
+
 ```cmd
 npm install -g express-generator@4
 
@@ -795,15 +797,49 @@ express --hbs express-web-server
 
 cd express-web-server
 npm install
-
-cd views
-node -e "fs.openSync('hello.hbs', 'w')"
-cd ..
-
-cd routes
-node -e "fs.renameSync('users.js', 'hello.js')"
-cd ..
 ```
+
+The express-generator generated the following files and folders:
+
+app.js
+package.json
+routes/index.js
+routes/users.js
+public/images
+public/javascripts
+public/stylesheets/style.css
+views/error.hbs
+views/index.hbs
+views/layout.hbs
+
+```js
+// app.js
+
+var createError = require('http-errors');
+var express = require('express');
+var path = require('path');
+var cookieParser = require('cookie-parser');
+var logger = require('morgan');
+
+var indexRouter = require('./routes/index');
+var usersRouter = require('./routes/users');
+
+var app = express();
+
+// view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'hbs');
+
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/', indexRouter);
+app.use('/users', userRouter);
+```
+
+express instance has a method named static which returns Express middleware that will serve requests that match up with any files in the public folder. This will serve files both in development and production environments which is recommended against. To reinforce this point, let's alter the the last line in our snippet from app.js to the following:
 
 ```js
 // app.js
@@ -813,12 +849,49 @@ if (process.env.NODE_ENV !== 'production') {
 }
 ```
 
-express instance has a method named static which returns Express middleware that will serve requests that match up with any files in the public folder.
-
 Now static hosting will only occur in development and production static hosting is left as a deployment infrastructure problem.
+
+In Express the app.set method can be used to store state as key-values. In this specific case the 'views' key and the 'view engine' key are both special-cased key names that instruct Express to load views from a particular path and use a particular view engine respectively.
+
+```cmd
+cd views
+node -e "fs.openSync('hello.hbs', 'w')"
+cd ..
+
+cd routes
+node -e "fs.renameSync('users.js', 'hello.js')"
+cd ..
+```
+
+```html
+<!-- views/layout.hbs -->
+
+<html>
+  <head>
+    <style>
+     body { background: #333; margin: 1.25rem }
+     h1 { color: #EEE; font-family: sans-serif }
+     a { color: yellow; font-size: 2rem; font-family: sans-serif }
+    </style>
+  </head>
+  <body>
+    {{{ body }}}
+  </body>
+</html>
+
+<!-- views/index.hbs -->
+
+<a href='/hello'>Hello</a><br>
+<a href='/hello?greeting=Ahoy'>Ahoy</a>
+
+<!-- views/hello.hbs -->
+
+<h1>{{ greeting }} World</h1>
+```
 
 ```js
 // routes/index.js
+
 var express = require('express');
 var router = express.Router();
 
@@ -830,6 +903,26 @@ module.exports = router;
 ```
 
 Express has res.render built-in to its core and it works in essentially the same way as reply.render added by the point-of-view plugin when registered in a Fastify server - although at the time of writing Express v4 renders at about half the speed of Fastify's point-of-view in production.
+
+```js
+// routes/hello.js
+
+var express = require('express');
+var router = express.Router();
+
+router.get('/', function(req, res, next) {
+  var greeting = 'greeting' in req.query ?
+    req.query.greeting :
+    'Hello';
+  res.render('hello', { greeting: greeting });
+});
+
+module.exports = router;
+```
+
+```cmd
+npm start
+```
 
 ## Streaming with Fastify
 
@@ -865,6 +958,7 @@ node -e "fs.openSync('articles.js', 'w')"
 
 ```js
 // app.js
+
 var indexRouter = require('./routes/index');
 var helloRouter = require('./routes/hello');
 var articlesRouter = require('./routes/articles');
@@ -874,6 +968,7 @@ var helloRouter = require('./routes/hello');
 var articlesRouter = require('./routes/articles');
 
 // routes/articles.js
+
 var express = require('express');
 var router = express.Router();
 var hnLatestStream = require('hn-latest-stream')
