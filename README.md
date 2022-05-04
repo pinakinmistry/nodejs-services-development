@@ -937,12 +937,34 @@ cd ..
 ```
 
 ```js
-return hnLatestStream(amount, type)
+// routes/articles/index.js
+
+'use strict'
+
+const hnLatestStream = require('hn-latest-stream')
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    const { amount = 10, type = 'html' } = request.query
+
+    if (type === 'html') reply.type('text/html')
+    if (type === 'json') reply.type('application/json')
+    return hnLatestStream(amount, type)
+  })
+}
 ```
 
-Returning the stream (the result of calling hnLatestStream) from the route handler instructs Fastify to safely pipe the stream to the response. The reply.send method can also be passed a stream and Fastify behaves in the same way - by piping the stream as the HTTP response.
+Returning the stream (the result of calling hnLatestStream) from the route handler instructs Fastify to safely pipe the stream to the response. The `reply.send()` method can also be passed a stream and Fastify behaves in the same way - by piping the stream as the HTTP response.
 
-Due to Fastify handling the stream for us, any errors in the stream will be handled and propagated. If we disconnect from the Internet and then attempt to access results in server error
+```cmd
+npm run dev
+```
+
+This will load different articles each time and there should be ten articles in total. The hn-latest-stream module uses the Hacker News API to fetch the content. It has to first lookup the latest story IDs and then for each ID it has to make a separate HTTP request to fetch the article and then push either JSON or HTML content to the stream that it returns. As such, it should be easy to observe the content being parsed and rendered by the browser incrementally in that there's a visible delay between each article rendering in the browser. This shows the power of streams in action for long running tasks. The server hasn't retrieved all the data yet, but we can still fill the above-the-fold (the part of the page that's first seen when a page loads) with the latest articles while more articles continue to load on the server, and then sent to the client to be displayed beneath the fold.
+
+Let's try out the query string parameters as well. In the browser let's try navigating to the URL: http://localhost:3000/articles?type=json&amount=250. This will load the JSON data for the latest 250 Hacker News stories. We should again be able to observe short delays between each JSON object being received by the browser.
+
+Due to Fastify handling the stream for us, any errors in the stream will be handled and propagated. If we disconnect from the Internet and then attempt to access results in server error.
 
 ## Streaming with Express
 
