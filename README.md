@@ -552,14 +552,6 @@ module.exports = async function (fastify, opts) {
 }
 ```
 
-## Express Generator
-
-```cmd
-npm install -g express-generator
-```
-
-The express command-line executable that's installed by the express-generator module when globally installed generates a bin/www file that similarly allows the port to be specified via a PORT environment variable.
-
 ## 4. Serving web content
 
 Static assets (content that does not change very often) should not be served by Node. Static content should be delivered via a CDN and/or a caching reverse proxy that specializes in static content such as NGINX or Varnish
@@ -799,6 +791,8 @@ cd express-web-server
 npm install
 ```
 
+The express command-line executable that's installed by the express-generator module when globally installed generates a bin/www file that similarly allows the port to be specified via a PORT environment variable
+
 The express-generator generated the following files and folders:
 
 app.js
@@ -902,7 +896,7 @@ router.get('/', function(req, res, next) {
 module.exports = router;
 ```
 
-Express has res.render built-in to its core and it works in essentially the same way as reply.render added by the point-of-view plugin when registered in a Fastify server - although at the time of writing Express v4 renders at about half the speed of Fastify's point-of-view in production.
+Express has `res.render()` built-in to its core and it works in essentially the same way as reply.render added by the point-of-view plugin when registered in a Fastify server - although at the time of writing Express v4 renders at about half the speed of Fastify's point-of-view in production.
 
 ```js
 // routes/hello.js
@@ -922,6 +916,40 @@ module.exports = router;
 
 ```cmd
 npm start
+```
+
+## http vs Express vs Fastify properties and methods
+
+```js
+// http
+res.statusCode = 200
+res.end('<string>')
+
+// Express
+res.status(200)
+res.send('<string>')
+app.use((req, res, next) => {
+  next(createError(404|405))
+  return
+})
+app.use((err, req, res, next) => {
+  res.status(err.status || 500)
+  res.send(err.message)
+})
+res.sendFile('<file-name-with-extension>') // static content
+res.render('<view-file-name-without-extension>', { variables }) // dynamic content
+
+// Fastify
+reply.status(200)
+reply.type('text/html')
+return '<string>'
+fastify.setNotFoundHandler((req, reply) => {
+  reply.status(405)
+  return '...'
+})
+return reply.sendFile('file-name-with-extension') // static content
+return reply.view('<view-file-name-with-extension>', { variables }) // dynamic content
+
 ```
 
 ## Streaming with Fastify
