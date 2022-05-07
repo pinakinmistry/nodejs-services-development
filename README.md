@@ -1013,10 +1013,6 @@ var indexRouter = require('./routes/index');
 var helloRouter = require('./routes/hello');
 var articlesRouter = require('./routes/articles');
 
-var indexRouter = require('./routes/index');
-var helloRouter = require('./routes/hello');
-var articlesRouter = require('./routes/articles');
-
 app.use('/', indexRouter);
 app.use('/hello', helloRouter);
 app.use('/articles', articlesRouter);
