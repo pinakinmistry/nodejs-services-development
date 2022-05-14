@@ -1053,9 +1053,15 @@ The stream.pipe(res, {end: false}) line tells the stream (our Hacker News stream
 npm start
 ```
 
-## Restful JSON services
+## 5. Restful JSON services
+
+There are many ways to construct a service, and various ways to implement how those services communicate. Interoperability between services and between services and clients is a question of architectural style. This training and the Node Services Developer Certification Examination itself focuses on one of the most commonly used architectural styles for web-facing systems: RESTful services. It also focuses on one of the most common data interchange formats: JSON.
 
 REST stands for REpresentational State Transfer, and it's an architectural style that seeks to make the most of the features of HTTP/1.1. Data is communicated via HTTP response bodies, metadata is communicated through HTTP headers, and operation outcomes are communicated with HTTP status codes. The State Transfer part of REST is about shuffling state from clients to server-backends. A REST service should be stateless, an intermediate layer between a browser and a database and it should boil down to performing one or more CRUD operations (Create, Read, Update, Delete).
+
+### Architectural Styles and the Design of Network-based Software Architectures
+
+https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm
 
 ## Using Fastify
 
@@ -1065,8 +1071,41 @@ cd my-service
 
 npm init fastify
 npm install
-npm install fastify-sensible
 ```
+
+One of the included dependencies in a generated Fastify project is fastify-sensible. The fastify-sensible plugin adds some useful "sane defaults" to Fastify, including the convenience functions for HTTP status codes and messages. This plugin is not registered in the app.js file but the generated project contains a plugins/sensible.js file that registers fastify-sensible. The plugins/sensible.js file looks as follows:
+
+```js
+// plugins/sensible.js
+
+'use strict'
+
+const fp = require('fastify-plugin')
+
+/**
+ * This plugins adds some utilities to handle http errors
+ *
+ * @see ht‌tps://github.com/fastify/fastify-sensible
+ */
+module.exports = fp(async function (fastify, opts) {
+  fastify.register(require('fastify-sensible'), {
+    errorHandler: false
+  })
+})
+```
+
+The app.js file loads all plugins in the plugins folder, using this piece of code:
+
+```js
+// app.js
+
+fastify.register(AutoLoad, {
+  dir: path.join(__dirname, 'plugins'),
+  options: Object.assign({}, opts)
+})
+```
+
+So the plugins/sensible.js file contains a method call of fastify.register with the fastify-sensible module being passed as the first argument. The second argument sets the options for fastify-sensible, errorHandler is set to false by default. In production mode (for instance, when process.env.NODE_ENV is set to production) it makes sense to set this to true as the fastify-sensible error handler produces lower-information error messages ("Something went wrong") which is better for public facing services.
 
 ```js
 // model.js
@@ -1103,6 +1142,8 @@ Not only is the code in model.js contrived, the error handling is subpar. Ideall
 ### 1. Using callback
 
 ```js
+// routes/bicycle/index.js
+
 'use strict'
 
 const { bicycle } = require('../../model')
@@ -1120,6 +1161,8 @@ module.exports = async (fastify, opts) => {
 }
 ```
 
+`reply.notFound()` method is added by the fastify-sensible plugin, it sets the response status code to 404 and generates some JSON output describing the Not Found error.
+
 Function passed as the route handler to fastify.get is not an async function. This is because an async function would return a promise that would resolve immediately and the route would fail as it tries to process a response value of undefined. Or if we did return something from it, that would be the response and the call to reply.send would be too late and result in an error regarding writing to a response that has ended.
 
 ### 2. Using async/await
@@ -1127,6 +1170,8 @@ Function passed as the route handler to fastify.get is not an async function. Th
 If we wanted to use a callback API inside an async route handler the following approach could instead be taken. Let's modify routes/bicycle/index.js to the following:
 
 ```js
+// routes/bicycle/index.js
+
 'use strict'
 
 const { bicycle } = require('../../model')
@@ -1152,7 +1197,10 @@ This can be a useful approach when mixing callback-based API's and promise-based
 The other approach to using callback-based APIs in an async function is to promisify the API.
 
 ```js
+// routes/bicycle/index.js
+
 'use strict'
+
 const { promisify } = require('util')
 const { bicycle } = require('../../model')
 const read = promisify(bicycle.read)
@@ -1172,6 +1220,8 @@ module.exports = async (fastify, opts) => {
 }
 ```
 
+Passing bicycle.read to util.promisify causes a new function to be returned, which we assign to read. When called this will return a promise that resolves with the result or rejects with the error depending on the outcome.
+
 Note that to generate a 404 Not Found HTTP Status we throw fastify.httpErrors.notFound instead of using reply.notFound. We also throw the caught err instead of passing err to reply.send. This is extremely useful as any unexpected throw in an async route handler will result in 500 status.
 
 ```cmd
@@ -1183,6 +1233,8 @@ console.log(statusCode))"
 node -e "http.request('http://localhost:3000/bicycle/1', { method: 'post'}, ({statusCode}) \
 => console.log(statusCode)).end()"
 ```
+
+content-type' property in the response headers is 'application/json; charset=utf-8'. The Fastify framework has detected that the response is JSON and set the headers appropriately.
 
 For Fastify the default behavior in this scenario is to respond with a 404 as well, so this will output: 404. Other acceptable response status codes would be 405 Method not Allowed and 400 Bad Request. The reason that a 405 is not the default for this scenario is that a 404 gives less information than a 405, so for public facing services this is a more secure approach.
 
