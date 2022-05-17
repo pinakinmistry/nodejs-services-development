@@ -1322,7 +1322,7 @@ app.use('/bicycle', bicycleRouter);
 app.use(function(req, res, next) {
   next(createError(404));
 });
-// or
+
 app.use(function(err, req, res, next) {
   res.status(err.status || 500);
   res.send({
@@ -1339,6 +1339,60 @@ node -e "http.get('http://localhost:3000/bicycle/1', ({headers}) => console.log(
 ```
 
 'content-type' property in the response headers is set to 'application/json; charset=utf-8' as Express framework has detected that the response is JSON because res.send was passed an object, and set the headers appropriately.
+
+While this meets our criteria by responding with a 404 status code, this error-handling middleware does not output JSON, it outputs HTML. We can see this HTML rendered in the browser by navigating to http://localhost:3000/bicycle/9:
+
+Not Found
+404
+NotFoundError: Not Found
+    at /Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/app.js:29:8
+    at Layer.handle [as handle_request] (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:317:13)
+    at /Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:284:7
+    at Function.process_params (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:335:12)
+    at Immediate.next (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:275:10)
+    at Immediate._onImmediate (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:635:15)
+    at processImmediate (node:internal/timers:466:21)
+
+While Fastify is geared towards building RESTful services, Express defaults to serving HTML as it was primarily for dynamic content generation. The error handling middleware can be modified to the following to produce a JSON response when errors occur:
+
+```js
+// app.js
+
+app.use(function(err, req, res, next) {
+  res.status(err.status || 500);
+  res.send({
+    type: 'error',
+    status: err.status,
+    message: err.message,
+    stack: req.app.get('env') === 'development' ? err.stack : undefined
+  });
+});
+```
+
+http://localhost:3000/bicycle/9
+
+{"type":"error","status":404,"message":"Not Found","stack":"NotFoundError: Not Found\n    at /Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/app.js:29:8\n    at Layer.handle [as handle_request] (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/layer.js:95:5)\n    at trim_prefix (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:317:13)\n    at /Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:284:7\n    at Function.process_params (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:335:12)\n    at Immediate.next (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:275:10)\n    at Immediate._onImmediate (/Users/pmistry/code/nodejs-services-development/5-restful-json-services/express-rest-service/node_modules/express/lib/router/index.js:635:15)\n    at processImmediate (node:internal/timers:466:21)"}
+
+```cmd
+node -e "http.request('http://localhost:3000/bicycle/1', { method: 'post'}, ({statusCode}) => console.log(statusCode)).end()"
+```
+
+For Express the default behavior in this scenario is to respond with a 404 as well, so this will output: 404.
+
+```js
+// model.js
+
+function read (id, cb) {
+  setImmediate(() => cb(Error()))
+}
+```
+
+```cmd
+node -e "http.get('http://localhost:3000/bicycle/1', ({statusCode}) => console.log(statusCode))"
+```
+
+output: 500
 
 ## Manipulating Data with RESTful Services
 

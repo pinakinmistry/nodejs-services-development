@@ -20,6 +20,6 @@ function bicycleModel () {
       setImmediate(() => cb(err))
       return
     }
-    setImmediate(() => cb(null, db[id]))
+    setImmediate(() => cb(Error()))
   }
 }
