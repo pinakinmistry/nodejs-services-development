@@ -8,9 +8,8 @@ module.exports = async function (fastify, opts) {
       console.log(request.params, result)
       if (err) {
         if (err.message === 'not found') {
-          reply.status(404)
-          return
-        } else return err
+          reply.notFound()
+        } else reply.sende(err)
       }
       reply.send(result)
     })
