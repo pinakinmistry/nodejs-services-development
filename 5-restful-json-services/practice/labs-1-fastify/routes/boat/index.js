@@ -9,7 +9,7 @@ module.exports = async function (fastify, opts) {
       if (err) {
         if (err.message === 'not found') {
           reply.notFound()
-        } else reply.sende(err)
+        } else reply.send(err)
       }
       reply.send(result)
     })
