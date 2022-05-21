@@ -1879,9 +1879,11 @@ node -e "http.get('http://localhost:3000/bicycle/99', (res) => res.setEncoding('
 
 // output a JSON object with a type property containing 'error', status property containing 404, and a stack property as per our changes to app.js in the previous chapter.
 
+In next 2 chapters we'll be focusing purely on Fastify as the scenarios discussed in these upcoming chapters are generally green-field cases as opposed to legacy/maintenance cases.
+
 ```
 
-## Services Aggregation and Consumption
+## 7. Services Aggregation and Consumption
 
 A common case for Node.js services, and RESTful services in general, is to provide a mediation role sometimes known as the "front of the backend". These are services which sit between client requests, especially from a browser-client, and backend API's which may be SOAP, RPC, database or also other REST-based APIs.
 
