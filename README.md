@@ -1394,9 +1394,77 @@ node -e "http.get('http://localhost:3000/bicycle/1', ({statusCode}) => console.l
 
 output: 500
 
-## Manipulating Data with RESTful Services
+## 6. Manipulating Data with RESTful Services
 
 ### With Fastify
+
+```js
+// model.js
+
+'use strict'
+
+module.exports = {
+  bicycle: bicycleModel()
+}
+
+function bicycleModel () {
+  const db = {
+    1: { brand: 'Veloretti', color: 'green' },
+    2: { brand: 'Batavus', color: 'yellow' }
+  }
+
+  return {
+    create, read, update, del, uid
+  }
+
+  function uid () {
+    return Object.keys(db)
+      .sort((a, b) => a - b)
+      .map(Number)
+      .filter((n) => !isNaN(n))
+      .pop() + 1 + ''
+  }
+
+  function create (id, data, cb) {
+    if (db.hasOwnProperty(id)) {
+      const err = Error('resource exists')
+      setImmediate(() => cb(err))
+      return
+    }
+    db[id] = data
+    setImmediate(() => cb(null, id))
+  }
+
+  function read (id, cb) {
+    if (!(db.hasOwnProperty(id))) {
+      const err = Error('not found')
+      setImmediate(() => cb(err))
+      return
+    }
+    setImmediate(() => cb(null, db[id]))
+  }
+
+  function update (id, data, cb) {
+    if (!(db.hasOwnProperty(id))) {
+      const err = Error('not found')
+      setImmediate(() => cb(err))
+      return
+    }
+    db[id] = data
+    setImmediate(() => cb())
+  }
+
+  function del (id, cb) {
+    if (!(db.hasOwnProperty(id))) {
+      const err = Error('not found')
+      setImmediate(() => cb(err))
+      return
+    }
+    delete db[id]
+    setImmediate(() => cb())
+  }
+}
+```
 
 ```js
 // routes/bicycle.js
@@ -1472,7 +1540,7 @@ module.exports = async (fastify, opts) => {
 }
 ```
 
-The key difference is idempotency, which means that multiple identical operations should lead to the same result. POST is not idempotent but PUT is idempotent.
+The difference between a POST and PUT is nuanced. Both involve sending data from a client to a server but they are supposed to behave differently. The key difference is idempotency, which means that multiple identical operations should lead to the same result. POST is not idempotent but PUT is idempotent.
 
 So multiple identical POST requests would, for instance, create multiple entries with identical data whereas multiple PUT requests should overwrite the same entry with the same data. This does not mean that PUT can't be used to create entries, or that POST can't be used to update, it's just that expected behavior is different.
 
@@ -1480,7 +1548,16 @@ A POST request can be used to create an entry without supplying an ID, whereas a
 
 Using POST to update should be an explicitly separate route for updating versus creating whereas the ability update or create with PUT can exist on the same route.
 
-Implementing POST, PUT and DELETE with Fastify (Cont.)
+```js
+fastify.post('/', async (request, reply) => {
+  const { data } = request.body
+  const id = uid()
+  await create(id, data)
+  reply.code(201)
+  return { id }
+})
+```
+
 This route allows a new entry to be created by using the uid method exported from model.js to get a new ID and then passes that ID along with an expected `data` property in the request POST payload to the create method.
 
 Note how there is no explicit error handling here, since the only known error would regarding the resource already existing and since the uid function provides a new ID that won't be an issue. Any error therefore would be an unknown error, if create throws for any reason this will cause the async function route handler to throw and then be handled as a 500 Server Error by Fastify.
@@ -1494,12 +1571,57 @@ node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers
 
 // output should be: 201 {"id":"3"}
 
+node -e "http.request('http://localhost:3000/bicycle', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => res.setEncoding('utf8').once('data', console.log.bind(null, res.statusCode))).end(JSON.stringify({data: {brand: 'Gazelle', color: 'red'}}))"
+
+// output should be: 201 {"id":"4"}
+```
+
+```js
+fastify.post('/:id/update', async (request, reply) => {
+  const { id } = request.params
+  const { data } = request.body
+  try {
+    await update(id, data)
+    reply.code(204)
+  } catch (err) {
+    if (err.message === 'not found') throw notFound()
+    throw err
+  }
+})
+```
+
+This allows the client to make a POST request to, for example, /bicycle/3/update and the entry with an ID of 3 will be updated and the response will contain no data and have a status code of 204 No Content since there's nothing we really need to send back but the request was successfully processed. As a side note, this is the only case where a JSON service may respond without the application/json Content-Type header since there is no content, so there is no content-type.
+
+```cmd
 node -e "http.request('http://localhost:3000/bicycle/3/update', { method: 'post', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end(JSON.stringify({data: {brand: 'Ampler', color: 'blue'}}))"
 
 // output 204
+
+node -e "http.get('http://localhost:3000/bicycle/3', (res) => res.setEncoding('utf8').once('data', console.log))"
+
+// output {"brand":"Ampler","color":"blue"}
 ```
 
-The only legitimate case for responding with no data is when the status code is 204 No Content but since 201 Created applies far more strongly in the case of entry creation we send an empty object in response.
+```js
+fastify.put('/:id', async (request, reply) => {
+  const { id } = request.params
+  const { data } = request.body
+  try {
+    await create(id, data)
+    reply.code(201)
+    return {}
+  } catch (err) {
+    if (err.message === 'resource exists') {
+      await update(id, data)
+      reply.code(204)
+    } else {
+      throw err
+    }
+  }
+})
+```
+
+The only legitimate case for responding with no data is when the status code is 204 No Content but since 201 Created applies far more strongly in the case of entry creation we send an empty object in response. If the entry is updated, we do respond with 204 No Content status code to indicate that the entry was updated but that there's no data to return.
 
 ```cmd
 node -e "http.request('http://localhost:3000/bicycle/99', { method: 'put', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end(JSON.stringify({data: {brand: 'VanMoof', color: 'black'}}))"
@@ -1521,7 +1643,22 @@ node -e "http.get('http://localhost:3000/bicycle/99', (res) => res.setEncoding('
 node -e "http.get('http://localhost:3000/bicycle/1', (res) => res.setEncoding('utf8').once('data', console.log))"
 
 // output {"brand":"Veloretti","color":"green"}
+```
 
+```js
+fastify.delete('/:id', async (request, reply) => {
+  const { id } = request.params
+  try {
+    await del(id)
+    reply.code(204)
+  } catch (err) {
+    if (err.message === 'not found') throw notFound()
+    throw err
+  }
+})
+```
+
+```cmd
 node -e "http.request('http://localhost:3000/bicycle/1', { method: 'delete', headers: {'content-type': 'application/json'}}, (res) => console.log(res.statusCode)).end()"
 
 // output: 204
