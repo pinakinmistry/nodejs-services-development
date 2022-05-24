@@ -1467,7 +1467,7 @@ function bicycleModel () {
 ```
 
 ```js
-// routes/bicycle.js
+// routes/bicycle/index.js
 
 'use strict'
 const { promisify } = require('util')
