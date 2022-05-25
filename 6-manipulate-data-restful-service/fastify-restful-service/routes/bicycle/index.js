@@ -40,4 +40,19 @@ module.exports = async function (fastify, opts) {
     }
   })
 
+  fastify.put('/:id', async function (request, reply) {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await update(id, data)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') {
+        await create(id, data)
+        reply.code(201)
+        return {}
+      } else throw err
+    }
+  })
+
 }
