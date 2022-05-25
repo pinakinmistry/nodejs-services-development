@@ -6,6 +6,7 @@ const { uid } = bicycle
 const read = promisify(bicycle.read)
 const create = promisify(bicycle.create)
 const update = promisify(bicycle.update)
+const del = promisify(bicycle.del)
 
 module.exports = async function (fastify, opts) {
   const { notFound } = fastify.httpErrors
@@ -52,6 +53,17 @@ module.exports = async function (fastify, opts) {
         reply.code(201)
         return {}
       } else throw err
+    }
+  })
+
+  fastify.delete('/:id', async function (request, reply) {
+    const { id } = request.params
+    try {
+      await del(id)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') return notFound()
+      else throw err
     }
   })
 
