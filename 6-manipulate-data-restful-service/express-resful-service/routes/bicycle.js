@@ -39,4 +39,19 @@ router.post('/:id/update', (req, res, next) => {
   })
 })
 
+router.put('/:id', (req, res, next) => {
+  const {id} = req.params
+  const {data} = req.body
+  bicycle.update(id, data, (err) => {
+    if (err) {
+      if (err.message === 'not found') {
+        bicycle.create(id, data, (err) => {
+          if (err) next(err)
+          else res.status(201).send({id})
+        })
+      } else next(err)
+    } else res.status(204).send()
+  })
+})
+
 module.exports = router
