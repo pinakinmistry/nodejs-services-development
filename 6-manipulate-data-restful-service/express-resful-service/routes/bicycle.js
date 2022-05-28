@@ -54,4 +54,14 @@ router.put('/:id', (req, res, next) => {
   })
 })
 
+router.delete('/:id', (req, res, next) => {
+  const {id} = req.params
+  bicycle.del(id, (err) => {
+    if (err) {
+      if (err.message === 'not found') next()
+      else next(err)
+    } else res.send()
+  })
+})
+
 module.exports = router
