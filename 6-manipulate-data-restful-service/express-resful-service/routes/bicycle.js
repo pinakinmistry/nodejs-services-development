@@ -1,6 +1,7 @@
 'use strict'
 
 const express = require('express')
+const { route } = require('.')
 const router = express.Router()
 const { bicycle } = require('../model')
 
@@ -14,6 +15,15 @@ router.get('/:id', (req, res, next) => {
     } else {
       res.send(data)
     }
+  })
+})
+
+router.post('/', (req, res, next) => {
+  const { data } = req.body
+  const id = bicycle.uid()
+  bicycle.create(id, data, (err) => {
+    if (err) next(err)
+    else res.status(201).send({id})
   })
 })
 
