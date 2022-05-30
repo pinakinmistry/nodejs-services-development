@@ -10,7 +10,6 @@ module.exports = async function (fastify, opts) {
     const { id } = request.params
     try {
       const result = await read(id)
-      reply.status(201)
       reply.send(result)
     } catch(err) {
       if (err.message === 'not found') throw notFound()
