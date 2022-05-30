@@ -13,4 +13,17 @@ router.get('/:id', function(req, res, next) {
   })
 });
 
+router.delete('/:id', function (req, res, next) {
+  const {id} = req.params
+  boat.del(id, err => {
+    if (err) {
+      if (err.message === 'not found') next()
+      else next(err)
+    } else {
+      res.statusCode = 204
+      res.send()
+    }
+  })
+})
+
 module.exports = router;
