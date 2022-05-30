@@ -1887,7 +1887,7 @@ In next 2 chapters we'll be focusing purely on Fastify as the scenarios discusse
 
 A common case for Node.js services, and RESTful services in general, is to provide a mediation role sometimes known as the "front of the backend". These are services which sit between client requests, especially from a browser-client, and backend API's which may be SOAP, RPC, database or also other REST-based APIs.
 
-How one service discovers another service is a large subject from custom IP addresses to service meshes with DNS discovery and domain names, to solutions that incorporate Distributed Hash Tables; there are many ways for one service to discover another.
+How one service discovers another service is a large subject from custom IP addresses to service meshes with DNS discovery and domain names, to solutions that incorporate Distributed Hash Tables; there are many ways for one service to discover another. A simple example would be where services are referenced with a URL that is injected as an environment variable.
 
 Supporting deployment infrastructure to inject values into the process at deployment-time allows for a certain degree of flexibility and reconfiguration possibilities.
 
@@ -1980,7 +1980,7 @@ Using async/await route handlers with Node.js core modules for making requests c
 ```cmd
 npm init fastify
 npm install
-npm install got
+npm install got@11
 ```
 
 ```js
@@ -2120,7 +2120,7 @@ This will output: 500.
 
 Both 400 and 404 status codes are forwarded to the response. All status codes in the 3xx, 4XX and 5XX ranges from the upstream services result in 500 status codes from our consumer service.
 
-## Proxying HTTP Requests
+## 8. Proxying HTTP Requests
 
 An HTTP Proxy is a server that forwards HTTP requests to backend services and then forwards responses to clients.
 
