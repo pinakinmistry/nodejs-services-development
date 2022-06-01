@@ -1980,7 +1980,7 @@ Using async/await route handlers with Node.js core modules for making requests c
 ```cmd
 npm init fastify
 npm install
-npm install got@11
+npm install got
 ```
 
 ```js
