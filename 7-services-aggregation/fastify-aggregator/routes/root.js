@@ -10,16 +10,28 @@ const bicycleSrv = `http://localhost:${BICYCLE_SERVICE_PORT}`
 const brandSrv = `http://localhost:${BRAND_SERVICE_PORT}`
 
 module.exports = async function (fastify, opts) {
+  const { httpErrors } = fastify
   fastify.get('/:id', async function (request, reply) {
     const { id } = request.params
-    const [ bicycle, brand ] = await Promise.all([
-      got(`${bicycleSrv}/${id}`).json(),
-      got(`${brandSrv}/${id}`).json()
-    ])
-    return {
-      id: bicycle.id,
-      color: bicycle.color,
-      brand: brand.name,
+    try {
+      const [ bicycle, brand ] = await Promise.all([
+        got(`${bicycleSrv}/${id}`).json(),
+        got(`${brandSrv}/${id}`).json()
+      ])
+      return {
+        id: bicycle.id,
+        color: bicycle.color,
+        brand: brand.name,
+      }
+    } catch (err) {
+      if (!err.response) throw err
+      if (err.response.statusCode === 404) {
+        throw httpErrors.notFound()
+      }
+      if (err.response.statusCode === 400) {
+        throw httpErrors.badRequest()
+      }
+      throw err
     }
   })
 }
