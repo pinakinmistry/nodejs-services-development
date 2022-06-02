@@ -24,7 +24,7 @@ const get = promisify((url, cb) => {
     err.method = 'GET'
     cb(err)
   })
-  req.setTimeout(1500)
+  req.setTimeout(15000)
 })
 
 const body = async (res) => {
@@ -76,6 +76,7 @@ async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
   const boatSrv = service(BOAT_SERVICE, BOAT_SERVICE_PORT)
   const BRAND_SERVICE_PORT = await getPort(p3)
   const brandSrv = service(BRAND_SERVICE, BRAND_SERVICE_PORT)
+  console.log('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
   const app = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
     cwd: __dirname,
     stdio: 'inherit',
@@ -86,12 +87,12 @@ async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
     boatSrv.kill()
     brandSrv.kill()
   }
-  try { 
+  try {
     await up(PORT)
     await up(BOAT_SERVICE_PORT)
     await up(BRAND_SERVICE_PORT)
     return { port: PORT, close, boatSrv, brandSrv }
-  } catch (err) { 
+  } catch (err) {
     close()
     throw err
   }
@@ -235,36 +236,36 @@ function boatService () {
   const colors = ['Yellow', 'Red', 'Orange', 'Green', 'Blue', 'Indigo']
   const brandIds = [231, 232, 233, 234, 235, 236]
   const MISSING = 2
-  
+
   const server = http.createServer((req, res) => {
     const { pathname } = url.parse(req.url)
     let id = pathname.match(/^\\/(\\d+)$/)
-  
+
     if (!id) {
       res.statusCode = 400
       return void res.end()
     }
-  
+
     id = Number(id[1])
-  
+
     if (id === MISSING) {
       res.statusCode = 404
       return void res.end()
     }
-  
+
     res.setHeader('Content-Type', 'application/json')
-  
+
     res.end(JSON.stringify({
       id: id,
       color: colors[id % colors.length],
       brand: brandIds[id % brandIds.length]
     }))
   })
-  
+
   server.listen(process.env.PORT || 0, () => {
     const { port } = server.address()
     console.log('Boat service listening on localhost on port: ' + port)
-  })   
+  })
 `
 }
 function brandService () {
@@ -272,33 +273,33 @@ function brandService () {
   const http = require('http')
   const url = require('url')
   const brands = [ 'Boston Whaler','Chaparral','Grady-White','Lund','MasterCraft','Sea Ray' ]
-  
+
   const MISSING = 234
-  
+
   const server = http.createServer((req, res) => {
     const { pathname } = url.parse(req.url)
     let id = pathname.match(/^\\/(\\d+)$/)
-  
+
     if (!id) {
       res.statusCode = 400
       return void res.end()
     }
-  
+
     id = Number(id[1])
-  
+
     if (id === MISSING) {
       res.statusCode = 404
       return void res.end()
     }
-  
+
     res.setHeader('Content-Type', 'application/json')
-  
+
     res.end(JSON.stringify({
       id: id,
       name: brands[(id - 231) % brands.length]
     }))
   })
-  
+
   server.listen(process.env.PORT || 0, () => {
     const { port } = server.address()
     console.log('Brand service listening on localhost on port: ' + port)
