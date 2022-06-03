@@ -8,12 +8,27 @@ module.exports = async function (fastify, opts) {
     BRAND_SERVICE_PORT
   } = process.env
   const {notFound, badRequest} = fastify.httpErrors
+  const gotConfig = reply => ({
+    timeout: 1250,
+    hooks: {
+      beforeRetry: [
+        () => {
+          console.log('$$$$$$$$ Retrying')
+          // 2 Options:
+          // throw Error()
+          // or
+          reply.status(500)
+          reply.send()
+        }
+      ]
+    }
+  })
 
   fastify.get('/:id', async function (request, reply) {
     const {id} = request.params
     try {
-      const boat = await got(`http://localhost:${BOAT_SERVICE_PORT}/${id}`).json()
-      const brand = await got(`http://localhost:${BRAND_SERVICE_PORT}/${boat.brand}`).json()
+      const boat = await got(`http://localhost:${BOAT_SERVICE_PORT}/${id}`, gotConfig(reply)).json()
+      const brand = await got(`http://localhost:${BRAND_SERVICE_PORT}/${boat.brand}`, gotConfig(reply)).json()
       reply.send({
         id: boat.id,
         color: boat.color,

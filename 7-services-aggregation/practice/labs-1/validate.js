@@ -24,7 +24,7 @@ const get = promisify((url, cb) => {
     err.method = 'GET'
     cb(err)
   })
-  req.setTimeout(15000)
+  req.setTimeout(1500)
 })
 
 const body = async (res) => {
@@ -76,7 +76,6 @@ async function system ([p1 = 3000, p2 = 4000, p3 = 5000] = []) {
   const boatSrv = service(BOAT_SERVICE, BOAT_SERVICE_PORT)
   const BRAND_SERVICE_PORT = await getPort(p3)
   const brandSrv = service(BRAND_SERVICE, BRAND_SERVICE_PORT)
-  console.log('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
   const app = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
     cwd: __dirname,
     stdio: 'inherit',
