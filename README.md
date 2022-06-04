@@ -2126,11 +2126,13 @@ An HTTP Proxy is a server that forwards HTTP requests to backend services and th
 
 As the system scales, at a certain point, the need for proxying tends to become inevitable.
 
-Generally, proxying should be done with a specialized configurable piece of infrastructure, such as NGINX, Kong or proprietary cloud gateway services.
+Generally, proxying should be done with a specialized configurable piece of infrastructure, such as NGINX, Kong or proprietary cloud gateway services. However, sometimes there are complex requirements for a proxy that may be better met with a Node.js proxying service. Other times the requirements may be so simple (like proxying a single route) that it just makes sense to use what's already available instead of investing in something else. In other cases, a Node.js proxying service can be a stop-gap on the way to a more comprehensive infrastructural proxying solution.
 
-However, sometimes there are complex requirements for a proxy that may be better met with a Node.js proxying service. Other times the requirements may be so simple (like proxying a single route) that it just makes sense to use what's already available instead of investing in something else.
+### Objectives
 
-In other cases, a Node.js proxying service can be a stop-gap on the way to a more comprehensive infrastructural proxying solution.
+Proxy HTTP requests for a single route.
+Modify data during proxying.
+Create a full proxying server.
 
 ## Single Route, Multiple Origin Proxy
 
@@ -2142,6 +2144,43 @@ cd my-route-proxy
 npm init fastify
 npm install fastify-reply-from fastify-sensible
 ```
+
+```js
+// plugins/reply-from.js
+
+'use strict'
+
+const fp = require('fastify-plugin')
+
+module.exports = fp(async function (fastify, opts) {
+  fastify.register(require('fastify-reply-from'), {
+    errorHandler: false
+  })
+})
+```
+
+The fastify-plugin library is used to apply the exported plugin application-wide.
+
+```js
+// routes/root.js
+'use strict'
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    const { url } = request.query
+    try {
+      new URL(url)
+    } catch (err) {
+      throw fastify.httpErrors.badRequest()
+    }
+    return reply.from(url)
+  })
+}
+```
+
+The URL constructor can be used in a similar fashion to Node core's url.parse method. The main difference is that the protocol (e.g. http://) and origin (the domain) portions of a URL must be present. If the URL constructor throws, then the value of url is an invalid URL. In that case we rethrow fastify.httpErrors.badRequest (as provided by fastify-sensible) to create a 400 status code response. Otherwise we return the result of reply.from(url).
+
+`reply.from` method is supplied by the fastify-reply-from plugin and returns a promise that resolves once the response from the upstream URL has been sent as a response to the client. We return it so that the route handler knows when the request has finished being handled by reply.from.
 
 ```js
 // app.js
@@ -2169,24 +2208,7 @@ module.exports = async function (fastify, opts) {
 }
 ```
 
-```js
-// routes/root.js
-'use strict'
-
-module.exports = async function (fastify, opts) {
-  fastify.get('/', async function (request, reply) {
-    const { url } = request.query
-    try {
-      new URL(url)
-    } catch (err) {
-      throw fastify.httpErrors.badRequest()
-    }
-    return reply.from(url)
-  })
-}
-```
-
-`reply.from` method is supplied by the fastify-reply-from plugin and returns a promise that resolves once the response from the upstream URL has been sent as a response to the client. We return it so that the route handler knows when the request has finished being handled by reply.from.
+Now let's start our Fastify server with npm run dev, this will start a server that listens on port 3000.
 
 ### Tiniest server
 
@@ -2196,7 +2218,7 @@ node -e "http.createServer((_, res) => (res.setHeader('Content-Type', 'text/plai
 
 Now if we navigate to htt‌p://localhost:3000/?url=http://localhost:5000 in a browser we should see hello world displayed. Most sites will trigger a redirect if they detect that a proxy server is being used (and the url query string parameter tends to give it away). For instance, if we navigate to http://localhost:3000/?url=http://google.com the browser will receive a 301 Moved response which will cause the browser to redirect to http://google.com directly. Therefore this approach is better suited when using URLs that are only accessible internally and this exposed route is a proxy to accessing them.
 
-The fastify-reply-from plugin can also be configured so that it can only proxy to a specific upstream server using the base option. In this case reply.from would be passed a path instead of a full URL and then make a request to the base URL concatenated with the path passed to reply.from. This can be useful for mapping different endpoints to a specific upstream service.
+The fastify-reply-from plugin can also be configured so that it can only proxy to a specific upstream server using the `base` option. In this case reply.from would be passed a path instead of a full URL and then make a request to the base URL concatenated with the path passed to reply.from. This can be useful for mapping different endpoints to a specific upstream service.
 
 More advanced proxying scenarios involve rewriting some aspect of the response from the upstream service while it's replying to the client. To finish off this section let's make our proxy server uppercase all content that arrives from the upstream service before sending it on to the client.
 
@@ -2229,9 +2251,11 @@ module.exports = async function (fastify, opts) {
 
 The second argument passed to reply.from is the options object. It contains an onResponse function. If the onResponse function is provided in the options object, the fastify-reply-from plugin will call it and will not end the response, it becomes up to us to manually end the response (with reply.send) in this case. The onResponse function is passed the request and reply objects for the route handler and a third argument: res, which represents the response from the upstream service. This is the same core http.IncomingMessage object that's passed to the callback of an http.request call.
 
-The `upper` function is an async generator function. The res object is an async iterable, which means it can be used with for await of syntax. This allows us to grab each chunk from the upstream services response, convert it to a string and then uppercase it. We yield the result from the upper function. The upper function in turn returns an async iterable object which can be passed to the Node core streams.Readable.from method which will convert the async iterable into a stream. The result is passed into reply.send which will take the data from the stream and send it to the response.
+The `upper` function is an async generator function. See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of#Iterating_over_async_generators. The res object is an async iterable, which means it can be used with for await of syntax. This allows us to grab each chunk from the upstream services response, convert it to a string and then uppercase it. We yield the result from the upper function. The upper function in turn returns an async iterable object which can be passed to the Node core streams.Readable.from method which will convert the async iterable into a stream. The result is passed into reply.send which will take the data from the stream and send it to the response.
 
 We could have instead buffered all content into memory, uppercased it, and then sent the entire contents to reply.send instead but this would not be ideal in a proxying situation: we don't necessarily know how much content we may be fetching. Instead our approach incrementally processes each chunk of data from the upstream service, sending it immediately to the client.
+
+Now, if we navigate to http://localhost:3000/?url=http://localhost:5000 in a browser the output should be HELLO WORLD.
 
 ## Single Origin, Multiple Routes
 
@@ -2292,6 +2316,8 @@ Opening `http://localhost:3000/` with result in
 {"statusCode":401,"error":"Unauthorized","message":"Unauthorized"}
 
 Opening `http://localhost:3000/?token=abc` will work again.
+
+The preHandler function we supplied to the options object can be an async function (and thus return a promise). If that promise rejects then the response is intercepted. In our case we throw the fastify.httpErrors.unauthorized error as supplied by fastify-sensible to create a 401 Unauthorized HTTP response.
 
 ## Web Security - Handling User Input
 

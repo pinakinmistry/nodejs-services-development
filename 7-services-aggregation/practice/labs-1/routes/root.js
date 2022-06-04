@@ -14,7 +14,7 @@ module.exports = async function (fastify, opts) {
       beforeRetry: [
         () => {
           console.log('$$$$$$$$ Retrying')
-          // 2 Options:
+          // Either throw or reply:
           // throw Error()
           // or
           reply.status(500)
