@@ -2321,6 +2321,13 @@ Opening `http://localhost:3000/?token=abc` will work again.
 
 The preHandler function we supplied to the options object can be an async function (and thus return a promise). If that promise rejects then the response is intercepted. In our case we throw the fastify.httpErrors.unauthorized error as supplied by fastify-sensible to create a 401 Unauthorized HTTP response.
 
+### Find process listening to a port and kill it
+
+```cmd
+lsof -i -P | grep LISTEN | grep :3000
+kill -9 <pid>
+```
+
 ## Web Security - Handling User Input
 
 The implications of a malicious user who is able to exploit insecure code can be significant. Therefore it is of paramount importance to always ensure that any external inputs to a service are sanitized in ways that prevent potential attackers from gaining any control of backend systems or from borrowing the authority of a site to exploit other users.
