@@ -2182,6 +2182,8 @@ The URL constructor can be used in a similar fashion to Node core's url.parse me
 
 `reply.from` method is supplied by the fastify-reply-from plugin and returns a promise that resolves once the response from the upstream URL has been sent as a response to the client. We return it so that the route handler knows when the request has finished being handled by reply.from.
 
+We can either autoload plugins or register them separately as below:
+
 ```js
 // app.js
 'use strict'
