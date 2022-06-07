@@ -2328,7 +2328,7 @@ lsof -i -P | grep LISTEN | grep :3000
 kill -9 <pid>
 ```
 
-## Web Security - Handling User Input
+## 9. Web Security - Handling User Input
 
 The implications of a malicious user who is able to exploit insecure code can be significant. Therefore it is of paramount importance to always ensure that any external inputs to a service are sanitized in ways that prevent potential attackers from gaining any control of backend systems or from borrowing the authority of a site to exploit other users.
 
@@ -2695,6 +2695,8 @@ module.exports = async (fastify, opts) => {
 
 Finally there's one more thing we can validate: the response. At first this can seem like an odd thing to do. However, in many enterprise architectures databases can be shared, in that multiple services may read and write to the same data storage. This means when retrieving data from a remote source, we cannot entirely trust that data even if it is internal. What if another service hasn't validated input? We don't want to send malicious state to the user.
 
+There's only two cases where we send any state back. One is the first POST route, where we send back a new ID. The other is the GET route where we send the result of a read back.
+
 In the first POST route the returned ID has the same rules as the id route parameter: it should be an integer. We can reuse the schema just for the ID by breaking it out of the paramsSchema:
 
 ```js
@@ -2718,6 +2720,8 @@ fastify.post('/', {
   return { id }
 })
 ```
+
+Note that the schema.response option differs slightly to others, in that we also need to specify the response code. This is because routes can respond with different response codes that send different data.
 
 If we wanted to apply a schema to all response codes from 200 to 299 we could set a key called 2xx on the schema.response object.
 
@@ -2761,6 +2765,135 @@ fastify.get('/:id', {
 })
 ```
 
+complete changes
+
+```js
+// routes/bicycle/index.js
+
+'use strict'
+const { promisify } = require('util')
+const { bicycle } = require('../../model')
+const { uid } = bicycle
+const read = promisify(bicycle.read)
+const create = promisify(bicycle.create)
+const update = promisify(bicycle.update)
+const del = promisify(bicycle.del)
+
+module.exports = async (fastify, opts) => {
+  const { notFound } = fastify.httpErrors
+
+  const dataSchema = {
+    type: 'object',
+    required: ['brand', 'color'],
+    additionalProperties: false,
+    properties: {
+      brand: {type: 'string'},
+      color: {type: 'string'}
+    }
+  }
+
+  const bodySchema = {
+    type: 'object',
+    required: ['data'],
+    additionalProperties: false,
+    properties: {
+      data: dataSchema
+    }
+  }
+
+  const idSchema = { type: 'integer' }
+  const paramsSchema = { id: idSchema }
+
+  fastify.post('/', {
+    schema: {
+      body: bodySchema,
+      response: {
+        201: {
+          id: idSchema
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { data } = request.body
+    const id = uid()
+    await create(id, data)
+    reply.code(201)
+    return { id }
+  })
+
+  fastify.post('/:id/update', {
+    schema: {
+      body: bodySchema,
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await update(id, data)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.get('/:id', {
+    schema: {
+      params: paramsSchema,
+      response: {
+        200: dataSchema
+      }
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    try {
+      return await read(id)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+
+  fastify.put('/:id', {
+    schema: {
+      body: bodySchema,
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    try {
+      await create(id, data)
+      reply.code(201)
+      return { }
+    } catch (err) {
+      if (err.message === 'resource exists') {
+        await update(id, data)
+        reply.code(204)
+      } else {
+        throw err
+      }
+    }
+  })
+
+  fastify.delete('/:id', {
+    schema: {
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
+    const { id } = request.params
+    try {
+      await del(id)
+      reply.code(204)
+    } catch (err) {
+      if (err.message === 'not found') throw notFound()
+      throw err
+    }
+  })
+}
+```
+
 While invalidation of input-related schemas (such as schema.body) will result in a 400 Bad Request, the invalidation of a response schema will result in a 500 Server Error result. We can try this out by temporarily modifying the GET route to respond with invalid data:
 
 ```js
@@ -2782,7 +2915,11 @@ fastify.get('/:id', {
 })
 ```
 
+If we change the response from await read(id) to {ka: 'boom'} the response schema will invalidate the response. Running the modified server (npm run dev) and accessing ht‌tp://localhost:3000/bicycle/1 will result in a 500 Server Error response because the response object no longer meets the schema.response definition for 200 OK responses.
+
 As a matter of preference, there is also a Fluent-API library that can generate the JSONSchema objects for us. For instance, the dataSchema could be declared with fluent-schema as S.object().prop('brand', S.string().required()).prop('color', S.string().required()).additionalProperties(false) where S is the fluent-schema instance. See htt‌ps://github.com/fastify/fluent-schema for more information.
+
+Another important practice that can help to protect against exploitative input is to write rigorous tests for services. This is not covered in this training nor is it part of the JavaScript Services Developer Certification. It is instead a key part of the sibling JavaScript Application Developer Certification and associated training. However, for information on applying unit testing skills to Fastify services, see https://www.fastify.io/docs/latest/Guides/Testing/.
 
 ## Route validation with Express
 
