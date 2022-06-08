@@ -2931,6 +2931,78 @@ As a result the most common approach to validation in Express is to develop cust
 
 We'll be looking at hand-rolled validation rules for the Express service.
 
+Before validation:
+
+```js
+// routes/bicycle.js
+
+var express = require('express');
+var router = express.Router();
+var model = require('../model');
+
+router.get('/:id', function(req, res, next) {
+  model.bicycle.read(req.params.id, (err, result) => {
+    if (err) {
+      if (err.message === 'not found') next();
+      else next(err);
+    } else {
+      res.send(result);
+    }
+  });
+});
+
+router.post('/', function(req, res, next) {
+  var id = model.bicycle.uid();
+  model.bicycle.create(id, req.body.data, (err) => {
+    if (err) next(err);
+    else res.status(201).send({ id });
+  });
+});
+
+router.post('/:id/update', function(req, res, next) {
+  model.bicycle.update(req.params.id, req.body.data, (err) => {
+    if (err) {
+      if (err.message === 'not found') next();
+      else next(err);
+    } else {
+      res.status(204).send();
+    }
+  });
+});
+
+router.put('/:id', function(req, res, next) {
+  model.bicycle.create(req.params.id, req.body.data, (err) => {
+    if (err) {
+      if (err.message === 'resource exists') {
+        model.bicycle.update(req.params.id, req.body.data, (err) => {
+          if (err) next(err);
+          else res.status(204).send();
+        });
+      } else {
+        next(err);
+      }
+    } else {
+      res.status(201).send({});
+    }
+  });
+});
+
+router.delete('/:id', function(req, res, next) {
+  model.bicycle.del(req.params.id, (err) => {
+    if (err) {
+      if (err.message === 'not found') next();
+      else next(err);
+    } else {
+      res.status(204).send();
+    }
+  });
+});
+
+module.exports = router;
+```
+
+After validation:
+
 ```js
 // routes/bicycle.js
 
@@ -3112,7 +3184,7 @@ node -e "http.get('http://localhost:3000/bicycle/4', (res) => res.setEncoding('u
 
 supertest library is an excellent tool for testing Express services, see htt‌ps://github.com/visionmedia/supertest for more information.
 
-## Web Security - Mitigating Attacks
+## 10. Web Security - Mitigating Attacks
 
 Attacks can take various forms and have different goals.
 
