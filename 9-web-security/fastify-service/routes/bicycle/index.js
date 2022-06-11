@@ -10,32 +10,37 @@ const del = promisify(bicycle.del)
 
 module.exports = async (fastify, opts) => {
   const { notFound } = fastify.httpErrors
-
-  fastify.post('/', {
-    schema: {
-      body: {
+  const paramsSchema = {
+    id: {
+      type: 'integer'
+    }
+  }
+  const bodySchema = {
+    type: 'object',
+    required: ['data'],
+    additionalProperties: false,
+    properties: {
+      data: {
         type: 'object',
-        required: ['data'],
+        required: ['brand', 'color'],
         additionalProperties: false,
         properties: {
-          data: {
-            type: 'object',
-            required: ['brand', 'color'],
-            additionalProperties: false,
-            properties: {
-              brand: {
-                type: 'string',
-              },
-              color: {
-                type: 'string'
-              }
-            }
+          brand: {
+            type: 'string',
+          },
+          color: {
+            type: 'string'
           }
         }
       }
     }
   }
-  , async (request, reply) => {
+
+  fastify.post('/', {
+    schema: {
+      body: bodySchema
+    }
+  }, async (request, reply) => {
     const { data } = request.body
     const id = uid()
     await create(id, data)
@@ -43,7 +48,12 @@ module.exports = async (fastify, opts) => {
     return { id }
   })
 
-  fastify.post('/:id/update', async (request, reply) => {
+  fastify.post('/:id/update', {
+    schema: {
+      params: paramsSchema,
+      body: bodySchema
+    }
+  }, async (request, reply) => {
     const { id } = request.params
     const { data } = request.body
     try {
@@ -55,7 +65,11 @@ module.exports = async (fastify, opts) => {
     }
   })
 
-  fastify.get('/:id', async (request, reply) => {
+  fastify.get('/:id', {
+    schema: {
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
     const { id } = request.params
     try {
       return await read(id)
@@ -65,7 +79,12 @@ module.exports = async (fastify, opts) => {
     }
   })
 
-  fastify.put('/:id', async (request, reply) => {
+  fastify.put('/:id', {
+    schema: {
+      params: paramsSchema,
+      body: bodySchema
+    }
+  }, async (request, reply) => {
     const { id } = request.params
     const { data } = request.body
     try {
@@ -82,7 +101,11 @@ module.exports = async (fastify, opts) => {
     }
   })
 
-  fastify.delete('/:id', async (request, reply) => {
+  fastify.delete('/:id', {
+    schema: {
+      params: paramsSchema
+    }
+  }, async (request, reply) => {
     const { id } = request.params
     try {
       await del(id)
