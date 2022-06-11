@@ -2530,7 +2530,7 @@ fastify.post('/', {
 
 See htt‌ps://www.fastify.io/docs/latest/Routes/#options for a full list of options.
 
-The schema option supports body, query, params, headers and response as schemas that can be declared for these areas of input (or output in the case of response)
+The schema option supports query, params, headers, body and response as schemas that can be declared for these areas of input (or output in the case of response)
 
 We declare the schema.body.type as 'object' which will usually be the case, even if the service accepts alternative mime-types like multipart. This is because the schema is applied (conceptually) to the body after it has been parsed into a JavaScript object.
 
