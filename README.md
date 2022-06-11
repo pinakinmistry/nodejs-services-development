@@ -2781,7 +2781,8 @@ const del = promisify(bicycle.del)
 
 module.exports = async (fastify, opts) => {
   const { notFound } = fastify.httpErrors
-
+  const idSchema = { type: 'integer' }
+  const paramsSchema = { id: idSchema }
   const dataSchema = {
     type: 'object',
     required: ['brand', 'color'],
@@ -2800,9 +2801,6 @@ module.exports = async (fastify, opts) => {
       data: dataSchema
     }
   }
-
-  const idSchema = { type: 'integer' }
-  const paramsSchema = { id: idSchema }
 
   fastify.post('/', {
     schema: {
