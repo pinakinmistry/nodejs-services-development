@@ -16,31 +16,32 @@ module.exports = async (fastify, opts) => {
   const paramsSchema = {
     id: idSchema
   }
+  const dataSchema = {
+    type: 'object',
+    required: ['brand', 'color'],
+    additionalProperties: false,
+    properties: {
+      brand: {
+        type: 'string',
+      },
+      color: {
+        type: 'string'
+      }
+    }
+  }
   const bodySchema = {
     type: 'object',
     required: ['data'],
     additionalProperties: false,
     properties: {
-      data: {
-        type: 'object',
-        required: ['brand', 'color'],
-        additionalProperties: false,
-        properties: {
-          brand: {
-            type: 'string',
-          },
-          color: {
-            type: 'string'
-          }
-        }
-      }
+      data: dataSchema
     }
   }
 
   fastify.post('/', {
     schema: {
-      body: bodySchema
-      reponse: {
+      body: bodySchema,
+      response: {
         201: idSchema
       }
     }
@@ -71,7 +72,10 @@ module.exports = async (fastify, opts) => {
 
   fastify.get('/:id', {
     schema: {
-      params: paramsSchema
+      params: paramsSchema,
+      response: {
+        data: dataSchema
+      }
     }
   }, async (request, reply) => {
     const { id } = request.params
