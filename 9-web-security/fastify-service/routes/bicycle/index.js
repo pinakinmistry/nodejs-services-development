@@ -74,7 +74,7 @@ module.exports = async (fastify, opts) => {
     schema: {
       params: paramsSchema,
       response: {
-        data: dataSchema
+        200: dataSchema
       }
     }
   }, async (request, reply) => {
