@@ -222,7 +222,7 @@ http://localhost:3000
 Output: Cannot GET /
 ```
 
-#### Define route
+#### Error handling
 
 ```js
 // app.js
@@ -833,7 +833,7 @@ app.use('/', indexRouter);
 app.use('/users', userRouter);
 ```
 
-express instance has a method named static which returns Express middleware that will serve requests that match up with any files in the public folder. This will serve files both in development and production environments which is recommended against. To reinforce this point, let's alter the the last line in our snippet from app.js to the following:
+express instance has a method named `static()` which returns Express middleware that will serve requests that match up with any files in the public folder. This will serve files both in development and production environments which is recommended against. To reinforce this point, let's alter the the last line in our snippet from app.js to the following:
 
 ```js
 // app.js
@@ -916,40 +916,6 @@ module.exports = router;
 
 ```cmd
 npm start
-```
-
-## http vs Express vs Fastify properties and methods
-
-```js
-// http
-res.statusCode = 200
-res.end('<string>')
-
-// Express
-res.status(200)
-res.send('<string>')
-app.use((req, res, next) => {
-  next(createError(404|405))
-  return
-})
-app.use((err, req, res, next) => {
-  res.status(err.status || 500)
-  res.send(err.message)
-})
-res.sendFile('<file-name-with-extension>') // static content
-res.render('<view-file-name-without-extension>', { variables }) // dynamic content
-
-// Fastify
-reply.status(200)
-reply.type('text/html')
-return '<string>'
-fastify.setNotFoundHandler((req, reply) => {
-  reply.status(405)
-  return '...'
-})
-return reply.sendFile('file-name-with-extension') // static content
-return reply.view('<view-file-name-with-extension>', { variables }) // dynamic content
-
 ```
 
 ## Streaming with Fastify
@@ -1051,6 +1017,40 @@ The stream.pipe(res, {end: false}) line tells the stream (our Hacker News stream
 
 ```cmd
 npm start
+```
+
+## http vs Express vs Fastify properties and methods
+
+```js
+// http
+res.statusCode = 200
+res.end('<string>')
+
+// Express
+res.status(200)
+res.send('<string>')
+app.use((req, res, next) => {
+  next(createError(404|405))
+  return
+})
+app.use((err, req, res, next) => {
+  res.status(err.status || 500)
+  res.send(err.message)
+})
+res.sendFile('<file-name-with-extension>') // static content
+res.render('<view-file-name-without-extension>', { variables }) // dynamic content
+
+// Fastify
+reply.status(200)
+reply.type('text/html')
+return '<string>'
+fastify.setNotFoundHandler((req, reply) => {
+  reply.status(405)
+  return '...'
+})
+return reply.sendFile('file-name-with-extension') // static content
+return reply.view('<view-file-name-with-extension>', { variables }) // dynamic content
+
 ```
 
 ## 5. Restful JSON services
