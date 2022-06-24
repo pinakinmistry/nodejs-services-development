@@ -221,8 +221,6 @@ module.exports = async function (fastify, opts) {
 ```js
 // routes/root.js
 
-'use strict'
-
 const root = `<html>
 ...
 </html>
@@ -233,6 +231,29 @@ module.exports = async function (fastify, opts) {
     reply.type('text/html')
     return root
   })
+}
+```
+
+### Error handling
+
+```js
+// app.js
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+module.exports = async function (fastify, opts) {
+
+  // fastify.register(...)
+
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.method !== 'GET') {
+      reply.status(405)
+      return 'Method Not Allowed\n'
+    }
+    return 'Not Found\n'
+  })
+
 }
 ```
 
