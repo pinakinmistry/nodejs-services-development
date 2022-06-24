@@ -186,8 +186,57 @@ app.use('/hello', helloRoutes)
 ```js
 res.sendFile('<file-name-with-extension>') // static content
 res.render('<view-file-name-without-extension>', { variables }) // dynamic content
+```
 
-// Fastify
+## Fastify
+
+```cmd
+node -e "fs.mkdirSync('fastify-web-server')"
+cd fastify-web-server
+npm init fastify
+npm install
+```
+
+```js
+// app.js
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+module.exports = async function (fastify, opts) {
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'plugins'),
+    options: Object.assign({}, opts)
+  })
+
+  fastify.register(AutoLoad, {
+    dir: path.join(__dirname, 'routes'),
+    options: Object.assign({}, opts)
+  })
+}
+```
+
+### Routes
+
+```js
+// routes/root.js
+
+'use strict'
+
+const root = `<html>
+...
+</html>
+`
+
+module.exports = async function (fastify, opts) {
+  fastify.get('/', async function (request, reply) {
+    reply.type('text/html')
+    return root
+  })
+}
+```
+
+```js
 reply.status(200)
 // or
 reply.code(200)
