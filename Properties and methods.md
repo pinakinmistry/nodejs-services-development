@@ -257,6 +257,60 @@ module.exports = async function (fastify, opts) {
 }
 ```
 
+### Static content
+
+```cmd
+npm install --save-dev fastify-static
+```
+
+```js
+// app.js
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+const dev = process.env.NODE_ENV !== 'production'
+
+const fastifyStatic = dev && require('fastify-static')
+
+module.exports = async function (fastify, opts) {
+  if (dev) {
+    fastify.register(fastifyStatic, {
+      root: path.join(__dirname, 'public')
+    })
+  }
+  // ...
+}
+```
+
+```html
+<!-- public/index.html -->
+<html>
+...
+</html>
+```
+
+```html
+<!-- public/hello.html -->
+<html>
+...
+</html>
+```
+
+### Route with static content
+
+```js
+// routes/hello/index.js
+
+'use strict'
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    return reply.sendFile('hello.html')
+  })
+}
+```
+
 ```js
 reply.status(200)
 // or
