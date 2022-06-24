@@ -50,6 +50,96 @@ const server = http.createServer((req, res) => {
 })
 ```
 
+## Express
+
+### Folder structure
+
+- express-server
+  |- routes
+     |- index.js
+     |- hello.js
+  |- bin
+     |- www
+  |- app.js
+
+```cmd
+npm init -y
+npm install express@4 http-errors@2
+```
+
+```js
+// package.json
+
+"scripts": {
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "start": "node ./bin/www"
+},
+```
+
+```js
+// app.js
+
+'use strict'
+const express = require('express')
+const app = express()
+
+module.exports = app
+```
+
+```js
+// bin/www
+
+#!/usr/bin/env node
+'use strict'
+
+const app = require('../app')
+const http = require('http')
+const PORT = process.env.PORT || 3000
+const server = http.createServer(app)
+
+server.listen(PORT)
+```
+
+```cmd
+npm start
+
+http://localhost:3000
+Output: Cannot GET /
+```
+
+### Error handling
+
+```js
+// app.js
+
+'use strict'
+const express = require('express')
+const createError = require('http-errors')
+
+const app = express()
+
+// Second last middleware
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    next(createError(405))
+    return
+  }
+  next(createError(404))
+})
+
+// Last middleware
+app.use((err, req, res, next) => {
+  res.status(err.status || 500)
+  res.send(err.message)
+})
+
+module.exports = app
+```
+
+```js
+res.sendFile('<file-name-with-extension>') // static content
+res.render('<view-file-name-without-extension>', { variables }) // dynamic content
+
 // Fastify
 reply.status(200)
 // or
