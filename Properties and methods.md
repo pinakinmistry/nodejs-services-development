@@ -79,7 +79,6 @@ npm install express@4 http-errors@2
 ```js
 // app.js
 
-'use strict'
 const express = require('express')
 const app = express()
 
@@ -112,7 +111,6 @@ Output: Cannot GET /
 ```js
 // app.js
 
-'use strict'
 const express = require('express')
 const createError = require('http-errors')
 
@@ -134,6 +132,55 @@ app.use((err, req, res, next) => {
 })
 
 module.exports = app
+```
+
+### Create routes
+
+```js
+// routes/index.js
+
+const { Router } = require('express')
+const router = Router()
+
+const root = `<html>
+...
+</html>
+`
+
+router.get('/', (req, res) => {
+  res.send(root)
+})
+
+module.exports = router
+```
+
+```js
+// routes/hello.js
+
+const { Router } = require('express')
+const router = Router()
+
+const hello = `<html>
+...
+</html>`
+
+router.get('/', (req, res) => {
+  res.send(hello)
+})
+
+module.exports = router
+```
+
+```js
+// app.js
+
+const indexRoutes = require('./routes')
+const helloRoutes = require('./routes/hello')
+
+const app = express()
+
+app.use('/', indexRoutes)
+app.use('/hello', helloRoutes)
 ```
 
 ```js
