@@ -377,6 +377,74 @@ module.exports = async (fastify, opts) => {
 }
 ```
 
+### Static content with Express
+
+```cmd
+npm install -g express-generator@4
+
+express --hbs express-web-server
+
+cd express-web-server
+npm install
+```
+
+```js
+// app.js
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use(express.static(path.join(__dirname, 'public')));
+}
+```
+
+```html
+<!-- views/layout.hbs -->
+
+<html>
+  ...
+  <body>
+    {{{ body }}}
+  </body>
+</html>
+
+<!-- views/index.hbs -->
+
+<a href='/hello'>Hello</a><br>
+<a href='/hello?greeting=Ahoy'>Ahoy</a>
+
+<!-- views/hello.hbs -->
+
+<h1>{{ greeting }} World</h1>
+```
+
+```js
+// routes/index.js
+
+var express = require('express');
+var router = express.Router();
+
+/* GET home page. */
+router.get('/', function(req, res, next) {
+  res.render('index');
+});
+module.exports = router;
+```
+
+```js
+// routes/hello.js
+
+var express = require('express');
+var router = express.Router();
+
+router.get('/', function(req, res, next) {
+  var greeting = 'greeting' in req.query ?
+    req.query.greeting :
+    'Hello';
+  res.render('hello', { greeting: greeting });
+});
+
+module.exports = router;
+```
+
 ```js
 reply.status(200)
 // or
