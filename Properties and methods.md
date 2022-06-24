@@ -302,11 +302,77 @@ module.exports = async function (fastify, opts) {
 ```js
 // routes/hello/index.js
 
-'use strict'
-
 module.exports = async (fastify, opts) => {
   fastify.get('/', async (request, reply) => {
     return reply.sendFile('hello.html')
+  })
+}
+```
+
+### Using templates
+
+```cmd
+npm install point-of-view handlebars
+```
+
+```js
+// app.js
+
+const path = require('path')
+const AutoLoad = require('fastify-autoload')
+
+const pointOfView = require('point-of-view')
+const handlebars = require('handlebars')
+
+module.exports = async function (fastify, opts) {
+
+  fastify.register(pointOfView, {
+    engine: { handlebars },
+    root: path.join(__dirname, 'views'),
+    layout: 'layout.hbs'
+  })
+  // ...
+}
+```
+
+```html
+<!-- view/layout.html -->
+<html>
+  ...
+  <body>
+    {{{ body }}}
+  </body>
+</html>
+```
+
+```html
+<!-- views/index.hbs -->
+<a href='/hello'>Hello</a><br>
+<a href='/hello?greeting=Ahoy'>Ahoy</a>
+```
+
+```html
+<!-- views/hello.hbs -->
+<h1>{{ greeting }} World</h1>
+```
+
+```js
+// routes/root.js
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    return reply.view('index.hbs')
+  })
+}
+```
+
+```js
+// routes/hello/index.js
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    const { greeting = 'Hello '} = request.query
+    return reply.view(`hello.hbs`, { greeting })
   })
 }
 ```
