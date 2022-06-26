@@ -460,3 +460,56 @@ return reply.sendFile('file-name-with-extension') // static content
 return reply.view('<view-file-name-with-extension>', { variables }) // dynamic content
 
 ```
+
+### Streaming with Fastify
+
+```js
+// routes/articles/index.js
+
+const hnLatestStream = require('hn-latest-stream')
+
+module.exports = async (fastify, opts) => {
+  fastify.get('/', async (request, reply) => {
+    const { amount = 10, type = 'html' } = request.query
+
+    if (type === 'html') reply.type('text/html')
+    if (type === 'json') reply.type('application/json')
+    return hnLatestStream(amount, type)
+    // or
+    // reply.send(hnLatestStream(amount, type))
+  })
+}
+```
+
+### Streaming with Express
+
+```js
+// routes/articles.js
+
+var express = require('express');
+var router = express.Router();
+var hnLatestStream = require('hn-latest-stream')
+var finished = require('stream').finished
+
+router.get('/', function(req, res, next) {
+  const { amount = 10, type = 'html' } = req.query
+
+  if (type === 'html') res.type('text/html')
+  if (type === 'json') res.type('application/json')
+
+  const stream = hnLatestStream(amount, type)
+
+  stream.pipe(res, {end: false})
+
+  finished(stream, (err) => {
+    if (err) {
+      next(err)
+      return
+    }
+    res.end()
+  })
+
+});
+
+module.exports = router;
+```
