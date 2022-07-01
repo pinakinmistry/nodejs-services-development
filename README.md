@@ -1115,7 +1115,7 @@ Not only is the code in model.js contrived, the error handling is subpar. Ideall
 const { bicycle } = require('../../model')
 
 module.exports = async (fastify, opts) => {
-  fastify.get('/:id', (request, reply) => {
+  fastify.get('/:id', (request, reply) => { // not an async function
     const { id } = request.params
     bicycle.read(id, (err, result) => {
       if (err) {
